@@ -1,0 +1,454 @@
+\documentclass[11pt]{article}
+
+\bibliographystyle{ieeetr}
+
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{acronym}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{rotating}
+\usepackage{pifont}
+\usepackage{tikz}
+\usepackage{enumitem}
+\usetikzlibrary{positioning,arrows.meta, shapes.geometric}
+
+\usepackage{caption}
+\usepackage[margin=1in]{geometry}
+\usepackage{cleveref}
+\usepackage{float}
+% --- Helper commands for the symbols ---
+\newcommand{\cmark}{\ding{51}}% checkmark
+\newcommand{\xmark}{\ding{55}}% cross
+
+% Acronym table
+\acrodef{CC}{Cloud Computing}
+\acrodef{EC}{Edge Computing}
+\acrodef{FC}{Fog Computing}
+\acrodef{CoC}{Computing Continuum}
+\acrodef{AI}{Artificial Intelligence}
+\acrodef{VM}{Virtual Machine}
+\acrodef{IoT}{Internet of Things}
+\acrodef{QoS}{Quality-of-Service}
+\acrodef{ES}{Edge Server}
+\acrodef{FS}{Fog Server}
+\acrodef{CS}{Cloud Server}
+
+
+\acrodef{CSP}{Cloud Service Provider}
+\acrodef{SaaS}{Software as a Service}
+\acrodef{PaaS}{Platform as a Service}
+\acrodef{IaaS}{Infrastructure as a Service}
+\acrodef{FaaS}{Function as a Service}
+
+\title{Energy-Aware Service Placement in Edge}
+\author{Théo HARDY}
+\date{2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+% Talk about IoT
+
+\section{Introduction on Edge Computing}
+
+\subsection{Cloud Computing}
+
+\ac{CC} has established itself as the ubiquitous backbone of modern computing environments. One of its primary advantages is economic efficiency; it enables small- and medium-sized enterprises (SMEs) to access powerful server resources at a relatively low cost, eliminating the need for significant upfront capital expenditure on proprietary hardware \cite{jiang2019cloud}. Leveraging vast networks of remote servers, \ac{CC} can dynamically provision computing, storage, and networking services in real-time, tailoring resources to precise user requirements regarding type and quantity \cite{othman2013survey}.
+
+This market is currently led by major industry players, including Google (Google Cloud), Amazon (AWS), and Microsoft (Azure) \cite{hua2023edge}. Beyond standalone services, research has increasingly focused on the synergistic relationship between Cloud and \ac{IoT}, a paradigm often referred to as CloudIoT \cite{botta2016integration}. This integration aims to revolutionize diverse sectors, from smart cities and ubiquitous healthcare to business process optimization. As a centralized solution, \ac{CC} remains a critical enabler of the \ac{IoT}, providing the elasticity and virtually unlimited resources required to execute computation-intensive \ac{IoT} applications \cite{deng2020optimal}.
+
+\subsection{Definition of Edge/Fog Computing}
+
+\ac{EC} is essentially migrates partial computing jobs from \ac{CC} to local edge servers. It is an emergent informatic paradigm aiming to enhance completing (not replace) the cloud architecture. Edge computing is essentially an edge optimization of \ac{CC}. Both of them are designed for handling big data. However, the main difference is that data can be distributed and processed on the closer edge servers in \ac{EC}. It performs data preprocessing and analysis near the data sources\cite{kong2022edge}. It should be noted that \ac{EC} cannot replace the roles and advantages of \ac{CC} because the cloud retains indispensable computing power and storage capacity. \ac{EC} and \ac{CC} should cooperate efficiently and securely \cite{hua2023edge}. \Cref{tab:comparison_edge_cloud} shows a comparison between Edge and Cloud Computing. 
+
+\begin{table}[ht!]
+    \centering
+    \caption{Comparison of Edge Computing and Cloud Computing}
+    \label{tab:comparison_edge_cloud}
+    
+    % The 'X' columns will wrap text
+    \begin{tabularx}{\textwidth}{ |l|X|X| } 
+        \hline
+        \textbf{} & \textbf{Edge Computing} & \textbf{Cloud Computing} \\
+        \hline 
+        \textbf{Computation Location}    & Local device  / At the periphery of the network & Centralized big data centers / Upper-most layer in the architecture \\
+
+        \hline
+        \textbf{Network Components}    & Terminal device, edge device and \ac{IoT} gateways, Core network hardwares & All basic network components, Data centers\\
+        \hline
+        \textbf{Resource Capability} &  Uses limited resources / often resource-constrained &Offers powerful computing resources and storage capacity \\
+        \hline
+
+        \textbf{Bandwidth Requirements} &  Low dependency on network connectivity / Reduces pressure on network bandwidth &High network bandwidth requirement / Data transfer to remote servers is bandwidth-limited \\
+                \hline
+        
+        \textbf{Scalability \& Deployment} & High flexibility and scalability / Temporary deployment or deployment with minimal planning  & Low flexibility and scalability / Complex deployment\\
+        \hline
+    \end{tabularx}
+\end{table}
+
+Some works also explore the more recent \ac{FC} paradigm \cite{salaht2020overview, lone2023review} introduced in 2012 by Cisco \cite{bonomi2012fog}. Although both \ac{EC} and \ac{FC} aim to reduce latency and bandwidth consumption by moving processing closer to the user, they operate at different layers:
+\begin{itemize}
+    \item Edge computing (\ac{EC}) processes data directly on end-devices or nearby gateways, enabling immediate responses.
+    \item Fog Computing (\ac{FC}) operates somewhat closer to the network core, often in a position between the edge devices and the centralized cloud on smart routers, gateways or network switches. The \ac{FC} layer handles more complex data processing, aggregation, filtering, and analytics capabilities before data is potentially forwarded up to the cloud.
+\end{itemize}
+
+Many studies consider the \ac{FC} part of the \ac{EC} paradigm, or integrate the two under the broader "Fog/Edge paradigm" \cite{alsadie2024comprehensive}. \Cref{fig:cocentric_cloud_scheme} shows the difference in geographic distribution between \ac{EC}, \ac{FC}, \ac{CC}.
+
+\begin{figure}[ht!]
+    \centering 
+    
+    \includegraphics[width=0.70\textwidth]{figures/Cloud_Fog_Edge_scheme.pdf}
+    
+    % [width=0.9\textwidth] makes it 90% of the text width
+    
+    \caption{Cloud Fog and Edge} 
+    \label{fig:cocentric_cloud_scheme}    
+\end{figure}
+% --- END FIGURE ---
+
+\subsection{Motivations of Edge Computing}
+
+However, the high computing power of centralized \ac{CC} has begun to show limitations in the face of modern data demands. The \ac{IoT} represents one of the most rapidly advancing domains in computing history, and its expansion has ushered in an era of unprecedented data generation. Projections indicate that the number of interconnected devices will soar to approximately 125 billion by 2030 \cite{saadouni2025identification}. This explosion in connected devices inevitably leads to the generation of massive amounts of data that require timely processing.
+
+The core limitations of the traditional cloud-centric architecture stem from the inherent geographical distance between distributed data sources (\ac{IoT} devices) and remote cloud servers. This centralized model results in significant data congestion, high latency, and unacceptable delays for time-sensitive applications. For many critical \ac{IoT} scenarios, such as the Internet of Vehicles (IoV), the application requirements necessitate ultra-high speed and ultra-low latency \cite{qin2018power, zhang2019mobile}.
+
+\ac{EC} emerges as a paradigm designed to address these fundamental CC limitations, offering numerous benefits by distributing resources closer to the data source.
+
+\begin{itemize}
+    \item \textbf{Ultra-Low Latency}: \ac{EC}  provides ultra-low latency by enabling data processing closer to where the data is generated \cite{apat2023comprehensive}.
+    \item \textbf{Energy Efficiency}: By sending data to local edge servers instead of distant, remote cloud data centers, the energy consumption of individual \ac{IoT} nodes can be significantly decreased.
+    \item \textbf{Scalability}: Edge nodes and \ac{FC} infrastructure offer moderate computing resources in a distributed manner. This enables \ac{EC}  to provide excellent scalability that satisfies the demands of large-scale \ac{IoT} applications, such as smart cities and autonomous driving \cite{kong2022edge}. This scalability is significantly eased by the integration of \ac{FaaS} with \ac{IoT} and \ac{EC} that improve modularity, resource utilization, and elastic scaling \cite{ghaseminya2025advancing}.
+\end{itemize}
+
+While individual \ac{IoT} devices cannot match the computational power of centralized data centers, there is a clear and significant trend of them becoming more performant. This increase in on-device processing capability is a crucial enabler for \ac{EC}, allowing for data pre-filtering and local analytics that reduce latency and bandwidth consumption.
+
+\subsection{Limitations of Edge/Fog Computing}
+
+% scalibity 
+
+However, \ac{EC} also face some limitations that are hard to tackle today : 
+\begin{itemize}
+    \item \textbf{Resource allocation} : \ac{EC}'s primary advantage over traditional \ac{CC} is its ability to perform computation and storage tasks locally, eliminating the need to upload all data to the cloud. However, because tasks are distributed across resource-constrained edge nodes, an intelligent and efficient resource management solution is crucial for \ac{EC}'s success \cite{hua2023edge}.
+    \item \textbf{Data security and privacy} : the heterogeneity nature of \ac{EC} makes traditional security and privacy solutions designed for centralized cloud models inadequate for non-centralized architecture, making the enhancement of data security and privacy protection a critical area for research\cite{apat2023comprehensive}.
+\end{itemize}
+
+\subsection{Computing Continnum Paradigm}
+
+The \acf{CoC} (also known as the Digital Continuum or Transcontinuum) represents an advanced paradigm in the \ac{CC} domain. Instead of viewing the architecture as rigidly separated layers, it conceives of Edge, Fog, and Cloud as a single, cohesive, and continuous computational infrastructure. This unification enables a seamless and dynamic flow of data and tasks, allowing them to be strategically placed at the most appropriate point in the infrastructure based on their specific requirements (e.g., latency, privacy, or processing power).
+
+This integrated model facilitates a logical and efficient processing pipeline. Typically, data is first generated and preprocessed directly on Edge devices to handle time-sensitive actions. From there, intermediate Fog nodes can perform further processing and partial aggregation. Finally, computationally intensive workloads such as Big Data analytics, large-scale AI model training, or complex global simulations are transferred to the HPC-enabled Cloud data centers that possess the necessary resources \cite{rosendo2022distributed}.
+
+These infrastructural federations, are seen as the critical computing fabric for modern digital society as the Europe Commission views the Continuum as a key strategic technology to drive the region's digital transformation \cite{montevecchi2020energy}.
+
+\section{Energy aware Edge Computing}
+
+In order to establish algorithms for service placement in \ac{CoC} regarding energy consumption, we have to establish a way to model energy consumption. Many works
+
+
+
+devices (different types (Serveurs Cloud, devices Fog, Edge, IoT) / network
+
+\section{Literature review: Devices Energy Metrics}
+% De voir les papiers comment ils l'ont modélisé
+% Est-ce que c'est une estimation, quel ordre de grandeur (est-ce les mêmes ??)
+% est-ce c'est via une formule, est-ce qu'on retrouve pratiquement la meme chose ? 
+% multi or mono objective 
+
+\Cref{tab:related_work} summarizes the distinctions between recent contributions in the domain of energy-aware Edge Computing. A primary differentiator among these works is the scope of the continuum coverage and the optimization technique employed.
+
+\Cref{tab:energy_metrics} summarizes
+
+% --- BEGIN ROTATED LANDSCAPE TABLE ---
+\begin{sidewaystable}[htbp] % This puts the table on its own landscape page
+    \centering
+    \footnotesize
+    \caption{A comparison of related work on Energy Aware Computing Continnum}
+    \label{tab:related_work}
+    
+    % We define the column types. 'l' for left, 'c' for center,
+    % and 'p{width}' for a paragraph column that wraps text.
+\begin{tabularx}{\textheight}{ X X ccc cccc X X X X }
+ 		
+ 		\toprule % Top line
+ 		
+ 		% --- This is the complex 2-row header ---
+ 		\multirow{1}{*}{Source} & 
+ 		\multirow{2}{*}{Type of Model} & 
+ 		\multicolumn{3}{c}{Continuum Coverage} & 
+ 		\multicolumn{4}{c}{Optimization Objectives} & 
+ 		\multirow{2}{*}{Technique} & 
+ 		\multirow{2}{*}{Energy Model} & 
+ 		\multirow{2}{*}{Application} & 
+ 		\multirow{2}{*}{Evaluation} \\
+ 		
+ 		% Partial lines under the multi-column headers
+ 		\cmidrule(lr){3-5} \cmidrule(lr){6-9}
+ 		
+ 		% This is the second row of the header
+ 		&  & Edge & Fog & Cloud & Energy & Cost & Latency & Other & & & & \\
+ 		
+ 		\midrule % Line between header and data
+ 		
+        % Rows
+ 		2023 \cite{jeong2023towards} &
+ 		Service scheduling &
+ 		\cmark & \xmark & \cmark &
+ 		\cmark & \xmark & \cmark & \cmark &
+ 		Reinforcement Learning \& Heuristics &
+ 		Server, Link, \& Migration &
+ 		Delay-sensitive services &
+ 		Simulation (CloudSim SDN) \\
+        \midrule
+
+         2022 \cite{naha2022multiple} &
+ 		Resource allocation &
+ 		\cmark & \cmark & \xmark &
+ 		\cmark & \cmark & \cmark & \cmark &
+ 		Multiple Linear Regression &
+ 		Predictive Model (from CPU) &
+ 		Time-sensitive IoT &
+ 		Simulation (CloudSim) \\
+        \midrule
+
+        2021 \cite{goudarzi2021distributed} &
+ 		DAG Application placement &
+ 		\cmark & \cmark & \cmark &
+ 		\cmark & \xmark & \cmark & \xmark &
+ 		Distributed DRL (IMPALA) &
+ 		IoT Device Only &
+ 	      IoT &
+ 		Simulation \& Testbed \\
+        \midrule
+        
+ 		2019 \cite{adhikari2019energy} &
+ 		offloading strategy &
+ 		\cmark & \cmark & \cmark &
+ 		\cmark & \xmark & \cmark & \cmark &
+ 		Firefly Alg. \& WSM &
+ 		Computation \& Tx Models &
+ 		Intensive IoT &
+ 		Simulation (2 datasets) \& Stat. analysis \\
+ 		
+ 		\bottomrule % Bottom line
+ 	\end{tabularx}
+ \end{sidewaystable}
+ % --- END ROTATED LANDSCAPE TABLE ---
+
+
+\subsection{Communication Energy}
+
+For energy consumption of communication devices, Adhikari in \cite{adhikari2019energy} proposes an analytical using a formula that calculates the resource usage during the uplink (offloading) and downlink (result retrieval) phases. It is defined as the product of the allocated bandwidth and the transmission time, where transmission time is derived from the data size and the channel's data rate (calculated via Shannon Capacity considering noise and fixed transmission power). Ahvar proposes in \cite{ahvar2019estimating} a more granular model that distinguishes between static energy (idle power of routers and switches) and dynamic energy, calculated based on the number of packets and the specific energy required to process, store, and forward them. Goudarzi et al. in \cite{goudarzi2021distributed} focus exclusively on the transmission energy of IoT devices, assuming Fog and Cloud servers are connected to constant power supplies. Their model calculates communication energy by multiplying the transmission power ($P^{tra}$) by the time required to upload or download data, but explicitly only when the IoT device is directly involved in the task execution or data forwarding. In \cite{jeong2023towards}, Jeong et al. focus on the energy consumption of network switches within the federated edge infrastructure. They model link energy as the sum of static energy (base power) and dynamic energy, where the dynamic portion is proportional to the number of active switch ports rather than specific packet counts. Additionally, they explicitly model migration energy, defined via a regression formula considering the VM size and available link bandwidth during service reconfiguration.
+
+\subsection{Devices Energy}
+
+To evaluate device's energy consumption, Adhikari et al. in \cite{adhikari2019energy} evaluates through a physics-based estimation model that sums the static and dynamic power consumption of the processor and memory over the task's execution time. The dynamic power is explicitly modeled as a function of the CPU's frequency and supply voltage ($\propto f V_{dd}^2$) and memory read/write operations, assuming a direct correlation between resource utilization and power draw. Ahvar et al. proposes a similar model in \cite{ahvar2019estimating} separating static (idle) and dynamic consumption, but adopts a measurement-based approach rather than a theoretical voltage-frequency formula. The dynamic part is modeled using a piecewise linear function instantiated with real power measurements taken from servers (e.g., Grid'5000 testbed) when fully loading cores sequentially. This function estimates energy by interpolating between these measured values based on the specific CPU utilization ratio. Goudarzi et al. \cite{goudarzi2021distributed} simplify the scope to IoT devices only, employing a mathematical model that switches between active processing energy (execution time $\times$ CPU power) when tasks are executed locally, and idle energy consumption (idle time $\times$ Idle power) when tasks are offloaded to remote servers. They utilize constant values for these power states (e.g., 0.5W for processing and 0.002W for idle) rather than dynamic voltage frequency scaling models. In \cite{naha2022multiple}, Naha et al. adopts a data-driven approach utilizing Multiple Linear Regression (MLR) to predict the energy consumption of Fog devices rather than explicitly modeling physical power states. Their model treats energy consumption as a dependent variable influenced by multiple independent system characteristics, including CPU utilization, device mobility, network communication, response time, and power availability. To instantiate this model, they derive energy usage patterns from historical workload traces (e.g., PlanetLab CPU utilization data \cite{beloglazov2012energy}), allowing the system to learn and predict the most energy-efficient resource for application execution. In \cite{jeong2023towards}, Jeong et al. utilize a standard linear power model for edge servers. They calculate server energy by summing static (idle) energy and dynamic energy, where the dynamic component scales linearly with the ratio of used CPU to total CPU capacity ($E_{static} + (E_{max} - E_{static}) \times Utilization$).
+
+
+
+% --- BEGIN PROS/CONS TABLE ---
+\begin{table}[htbp]
+    \centering
+    \small % Use small font to fit the text content
+    \caption{Comparison of Energy Estimation Methodologies}
+    \label{tab:energy_methodology_comparison}
+
+    % Column Setup:
+    % l: Source (narrow, doesn't wrap)
+    % >{\hsize=0.6\hsize}X: Methodology (Medium width, wraps)
+    % >{\hsize=1.2\hsize}X: Pros (Wide, wraps)
+    % >{\hsize=1.2\hsize}X: Cons (Wide, wraps)
+    % Note: The sum of the 'hsize' modifiers (0.6 + 1.2 + 1.2 = 3.0) must equal the number of X columns (3).
+    
+    \begin{tabularx}{\textwidth}{ 
+        l 
+        >{\hsize=0.6\hsize}X 
+        >{\hsize=1.2\hsize}X 
+        >{\hsize=1.2\hsize}X 
+        }
+        
+        \toprule
+        \textbf{Source} & \textbf{Methodology} & \textbf{Pros} & \textbf{Cons} \\
+        \midrule
+
+        Naha \cite{naha2022multiple} & 
+        \textbf{Data-Driven / MLR} \newline (Regression on historical traces) & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Holistic:} Captures complex correlations between diverse factors (mobility, response time).
+            \item \textbf{Adaptive:} Learns patterns from real workload traces (e.g., PlanetLab).
+        \end{itemize} & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Data Dependency:} Accuracy is entirely dependent on quality of historical data.
+            \item \textbf{``Black Box'':} Lacks explicit physical modeling, making it harder to pinpoint high energy causes.
+        \end{itemize} \\
+        \midrule
+
+
+        Goudarzi \cite{goudarzi2021distributed} & 
+        \textbf{Discrete State / Constant} \newline (Active vs. Idle values) & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Simplicity:} Low computational overhead, making it ideal for iterative optimization (e.g., DRL).
+            \item \textbf{IoT-Focus:} Directly addresses the primary constraint of battery-operated edge devices.
+        \end{itemize} & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Coarse-Grained:} Ignores Dynamic Voltage and Frequency Scaling (DVFS).
+            \item \textbf{Limited Scope:} Neglects the significant energy footprint of network infra and Cloud/Fog servers.
+        \end{itemize} \\  \\
+        \midrule
+
+        
+        Adhikari \cite{adhikari2019energy} & 
+        \textbf{Theoretical / Analytical} \newline ($f V^2$, Shannon Capacity) & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Soundness:} Rooted in fundamental physics and information theory.
+            \item \textbf{Generalizability:} Applicable without specific hardware profiling.
+        \end{itemize} & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Idealized:} May overlook real-world hardware non-linearities and static overheads.
+            \item \textbf{Complexity:} Requires specific hardware constants (capacitance, leakage) that are hard to obtain.
+        \end{itemize} \\  \\
+        \midrule
+
+        Ahvar \cite{ahvar2019estimating} & 
+        \textbf{Measurement-Based} \newline (Packet counting, Linear interpolation) & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Accuracy:} High fidelity to real-world behavior due to physical profiling.
+            \item \textbf{Granularity:} Distinguishes between static and dynamic network costs.
+        \end{itemize} & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{High Effort:} Requires access to specific hardware for initial profiling.
+            \item \textbf{Scalability:} Packet-level simulation is computationally expensive for large networks.
+        \end{itemize} \\  \\
+        \midrule
+
+        Jeong \cite{jeong2023towards} &
+        \textbf{Linear Utilization / Port-Based} \newline (Linear CPU model, Active Ports) & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Migration-Aware:} Explicitly models the energy cost of moving VMs.
+            \item \textbf{Network-Aware:} Accounts for switch energy via active ports.
+            \item \textbf{Efficiency:} Linear models are computationally fast for simulation.
+        \end{itemize} & 
+        \begin{itemize}[nosep, leftmargin=*, after=\vspace{-\baselineskip}, before=\vspace{-0.5\baselineskip}]
+            \item \textbf{Linearity Assumption:} Assumes power scales perfectly linearly with load, which varies by hardware.
+            \item \textbf{Port Granularity:} "Active ports" is less precise than bit-level tracking for network energy.
+        \end{itemize} \\  \\
+
+        
+        \bottomrule
+    \end{tabularx}
+\end{table}
+% --- END PROS/CONS TABLE ---
+\section{Mathematical formulation of the energy in computing continuum}
+\subsection{Server energy}
+\subsubsection{Server Edge/Fog}
+Eserver
+
+CPU total
+\subsubsection{Server Cloud}
+\subsection{IoT energy}
+
+\cite{adhikari2019energy}: amount of energy consumed by \ac{IoT} device or  computational server $TP^C=DP^C+SP^C$ (CPU) and $TP^M = DP^{MW} + DP^{MR} + A_M$ (Memory)
+
+with:
+\begin{itemize}
+    \item CPU dynamic power consumption: $DP^C=\sum_{a=1}^{CR}\beta fV_{dd}^2$ (physic estimation)
+    \begin{itemize}
+        \item $CR$ is the number of core
+        \item $f$ the frequency
+        \item $V_{dd}$ is the voltage of the cores
+        \item $\beta$ is a constant associate to the cores
+    \end{itemize}
+    \item CPU static power consumption: $SP^C=dV_{dd}$
+    \item memory dynamic power consumption write and read: $DP^{MW}, DP^{MR}$
+    \item memory static power required during idle state: $A_m$
+\end{itemize}
+
+\subsection{Communication}
+
+\section{Estimation}
+% identifier l'ordre de grandeur
+
+% --- BEGIN ENERGY METRICS TABLE ---
+\begin{table}[H]
+    \centering
+    \small % Use small font to ensure it fits comfortably
+    \caption{Summary of Energy Metrics and Measurement Methodologies}
+    \label{tab:energy_metrics}
+
+    % Column Definition:
+    % 'l' for Source (left aligned)
+    % 'Y' (custom defined below) for the other 7 columns so they are centered and equal width
+    % If 'Y' doesn't work, we can define it locally here:
+    \begin{tabularx}{\textwidth}{ 
+        l                           % Source column
+        >{\centering\arraybackslash}X % IoT
+        >{\centering\arraybackslash}X % FCs & ESs
+        >{\centering\arraybackslash}X % Cloud
+        >{\centering\arraybackslash}X % Switch
+        >{\centering\arraybackslash}X % Dynamic
+        >{\centering\arraybackslash}X % Static
+        >{\centering\arraybackslash}X % Measured
+        >{\centering\arraybackslash}X % Physical Est.
+        }
+        
+        \toprule
+        
+        % --- Header Row 1 (Grouped Categories) ---
+        \multirow{2}{*}{Source} & 
+        \multicolumn{4}{c}{Device Scope} & 
+        \multicolumn{2}{c}{Energy Type} & 
+        \multicolumn{2}{c}{Methodology} \\
+        
+        % Partial horizontal lines for grouping
+        \cmidrule(lr){2-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+        
+        % --- Header Row 2 (Specific Columns) ---
+        & \ac{IoT} & \acp{FC} \& \acp{ES} & \acp{CS} & Switch \& Transmission& Dynamic & Static & Real Meas. & Phys. Est. \\
+        
+        \midrule
+        
+        % --- DATA ROW TEMPLATES (Copy these) ---
+        \cite{jeong2023towards} & 
+        \xmark & \cmark & \xmark & \cmark & 
+        \cmark & \cmark & 
+        \cmark & \xmark \\
+        \midrule
+        
+        \cite{naha2022multiple} & 
+        \xmark & \cmark & \xmark & \xmark & 
+        \cmark & \xmark & 
+        \cmark & \xmark \\
+        \midrule
+        
+        \cite{goudarzi2021distributed} & 
+        \cmark & \xmark & \xmark & \cmark & 
+        \cmark & \cmark & 
+        \cmark & \xmark \\
+        \midrule
+
+        \cite{ahvar2019estimating} & 
+        \cmark & \cmark & \cmark & \cmark & 
+        \cmark & \cmark & 
+        \cmark & \xmark \\
+        \midrule
+
+        \cite{adhikari2019energy} & 
+        \cmark & \cmark & \cmark & \cmark & 
+        \cmark & \cmark & 
+        \xmark & \cmark \\
+        \midrule
+        
+        \bottomrule
+    \end{tabularx}
+\end{table}
+% --- END ENERGY METRICS TABLE ---
+
+
+\bibliography{references}  
+
+\end{document}
