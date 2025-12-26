@@ -1,24 +1,15 @@
-# AI & Energy Awareness Edge Computing
+# Energy-aware Computing Continuum
 
-## Installation
+This repository contains the code and research paper for an Energy-aware Service Placement framework in the Cloud-Edge Computing Continuum.
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/TheHardy04/EnergyAwarenessEdgeComputing.git
-    cd "EnergyAwarenessEdgeComputing"
-    ```
+## Structure
 
-2.  Install the required packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+- **[first_algo](/first_algo/)**: Source code for the placement algorithms, graph models, and main execution script.
+  - `src/`: Core modules for infrastructure, application, and graph representation.
+  - `main.py`: Entry point for running the placement demo.
+  - `properties/`: Configuration files defining infrastructure nodes and application components.
+- **[paper](/paper/)**: LaTeX source code for the research paper "Energy-Aware Service Placement in Edge".
 
-## Usage
+## Acknowledgement
 
-To run the network graph visualization, execute the following command from the root directory of the project:
-
-```bash
-python main.py
-```
-
-This will display a plot of the network graph with nodes representing IoT devices, gateways, fog servers, and cloud servers, along with their resource attributes and network link characteristics that comes from a property file.
+TBD
