@@ -362,9 +362,7 @@ where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the tot
     \label{tab:energy_metrics}
 
     % Column Definition:
-    % 'l' for Source (left aligned)
-    % 'Y' (custom defined below) for the other 7 columns so they are centered and equal width
-    % If 'Y' doesn't work, we can define it locally here:
+    % Added one extra 'X' column at the end for 'Simu. Param.'
     \begin{tabularx}{\textwidth}{ 
         l                           % Source column
         >{\centering\arraybackslash}X % IoT
@@ -375,6 +373,7 @@ where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the tot
         >{\centering\arraybackslash}X % Static
         >{\centering\arraybackslash}X % Measured
         >{\centering\arraybackslash}X % Physical Est.
+        >{\centering\arraybackslash}X % Simu. Param.
         }
         
         \toprule
@@ -383,45 +382,76 @@ where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the tot
         \multirow{2}{*}{Source} & 
         \multicolumn{4}{c}{Device Scope} & 
         \multicolumn{2}{c}{Energy Type} & 
-        \multicolumn{2}{c}{Methodology} \\
+        \multicolumn{3}{c}{Methodology} \\ % Extended to 3 columns
         
         % Partial horizontal lines for grouping
-        \cmidrule(lr){2-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+        \cmidrule(lr){2-5} \cmidrule(lr){6-7} \cmidrule(lr){8-10}
         
         % --- Header Row 2 (Specific Columns) ---
-        & \ac{IoT} & \acp{FC} \& \acp{ES} & \acp{CS} & Switch \& Transmission& Dynamic & Static & Real Meas. & Phys. Est. \\
+        & \ac{IoT} & \acp{FC} \& \acp{ES} & \acp{CS} & Switch \& Trans. & Dyn. & Stat. & Meas. & Phys. & Simu. \\
         
         \midrule
         
-        % --- DATA ROW TEMPLATES (Copy these) ---
+        % --- DATA ROWS ---
+        
+        \cite{baneshi2024analyzing} & 
+        \cmark & \cmark & \cmark & \cmark & 
+        \cmark & \xmark & 
+        \cmark & \xmark & \xmark \\
+        \midrule
+        
+        \cite{paipuri2024ceems} & 
+        \xmark & \xmark & \cmark & \cmark & 
+        \cmark & \cmark & 
+        \cmark & \xmark & \xmark \\
+        \midrule
+        
+        \cite{iftikhar2023hunterplus} & 
+        \xmark & \cmark & \cmark & \cmark & 
+        \cmark & \cmark & 
+        \cmark & \cmark & \xmark \\
+        \midrule
+        
         \cite{jeong2023towards} & 
         \xmark & \cmark & \xmark & \cmark & 
         \cmark & \cmark & 
-        \cmark & \xmark \\
+        \cmark & \xmark & \xmark \\
+        \midrule
+        
+        \cite{cui2022energy} & 
+        \xmark & \cmark & \xmark & \cmark & 
+        \cmark & \xmark & 
+        \xmark & \xmark & \cmark \\
         \midrule
         
         \cite{naha2022multiple} & 
         \xmark & \cmark & \xmark & \xmark & 
         \cmark & \xmark & 
-        \cmark & \xmark \\
+        \cmark & \xmark & \xmark \\
         \midrule
         
         \cite{goudarzi2021distributed} & 
         \cmark & \xmark & \xmark & \cmark & 
         \cmark & \cmark & 
-        \cmark & \xmark \\
+        \cmark & \xmark & \xmark \\
         \midrule
 
         \cite{ahvar2019estimating} & 
         \cmark & \cmark & \cmark & \cmark & 
         \cmark & \cmark & 
-        \cmark & \xmark \\
+        \cmark & \xmark & \xmark \\
         \midrule
 
         \cite{adhikari2019energy} & 
         \cmark & \cmark & \cmark & \cmark & 
         \cmark & \cmark & 
-        \xmark & \cmark \\
+        \xmark & \cmark & \cmark \\
+        \midrule
+        
+        \cite{saraswat2019energy} & 
+        \cmark & \cmark & \cmark & \xmark & 
+        \cmark & \cmark & 
+        \xmark & \xmark & \cmark \\
         \midrule
         
         \bottomrule
