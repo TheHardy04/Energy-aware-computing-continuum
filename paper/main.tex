@@ -250,12 +250,6 @@ $$
 $$
 where $E^{static}_{server}$ represents the idle power consumption, and $E^{max}_{server}$ denotes the consumption at peak load. This approach is widely adopted for its simplicity and applicability to virtual machine (VM) scheduling. Similarly, Naha et al. utilize PlanetLab workload traces to derive energy consumption based on regression analysis of CPU utilization in Fog devices, emphasizing empirical validation over theoretical modeling \cite{naha2022multiple}.
 
-\subsubsection{State-Based Integral Models}
-Moving beyond linear approximations, Saraswat et al. differentiate energy calculations across Edge, Fog, and Cloud layers. They posit that devices within the same layer share identical capabilities. The total energy $E$ is calculated by integrating power consumption over time across distinct states (idle and active) \cite{saraswat2019energy}:
-$$
-    E = \int_{T_{idle}} P_{i}(t)dt + \int_{T_{active}} P_{a}(t)dt
-$$
-Here, $P_{i}(t)$ and $P_{a}(t)$ represent the power consumption per unit time in idle and active states, respectively, while $T_{idle}$ and $T_{active}$ denote the duration the device remains in each state.
 
 \subsubsection{Holistic and Non-Linear Models}
 While linear models offer simplicity, recent works like the HunterPlus framework by Iftikhar et al. argue for a holistic approach that accounts for non-linear behaviors and infrastructure overheads \cite{iftikhar2023hunterplus}. They define total energy $E_{T}$ as the sum of computing hardware and cooling infrastructure:
@@ -293,7 +287,16 @@ $$
 $$
 Here, $\alpha$ is a weighting parameter that enables prioritizing service coverage over raw energy savings, ensuring the system converges to a Nash Equilibrium that minimizes wasted energy while maintaining service levels.
 
-\subsection{Physics-Based Component Models}
+\subsection{Analytical and Physics-Based Models}
+
+\subsubsection{State-Based Integral Models}
+Moving beyond linear approximations, Saraswat et al. differentiate energy calculations across Edge, Fog, and Cloud layers. They posit that devices within the same layer share identical capabilities. The total energy $E$ is calculated by integrating power consumption over time across distinct states (idle and active) \cite{saraswat2019energy}:
+$$
+    E = \int_{T_{idle}} P_{i}(t)dt + \int_{T_{active}} P_{a}(t)dt
+$$
+Here, $P_{i}(t)$ and $P_{a}(t)$ represent the power consumption per unit time in idle and active states, respectively, while $T_{idle}$ and $T_{active}$ denote the duration the device remains in each state.
+
+\subsubsection{Physics-Based Component Models}
 Adhikari et al. offer a more granular formulation derived from circuit physics, applicable to both IoT devices and Servers. They decompose total power into CPU ($TP^C$) and Memory ($TP^M$) components. The dynamic CPU power is modeled as a function of the square of the supply voltage ($V_{dd}$) \cite{adhikari2019energy}:
 $$
     DP^C = \sum_{a=1}^{CR} \beta V_{dd}^2
@@ -342,14 +345,13 @@ $$
 This linear regression model links the VM size and available link bandwidth ($BW_{link}^{avail}$) to energy costs via experimentally determined parameters $\alpha$ and $\beta$.
 
 \subsubsection{Application-Aware Flow Models}
-While previous models focus on total transmission duration, Baneshi et al. argue that in the computing continuum (Edge-Fog-Cloud), energy must be attributed to specific applications sharing the infrastructure \cite{baneshi2024analyzing}. They propose a flow-based model for shared devices (e.g., routers and gateways) that allocates the active energy of Network Interface Cards (NICs) based on the bandwidth proportion used by an application:
+While previous models focus on total transmission duration, Baneshi et al. argue that in the computing continuum (Edge-Fog-Cloud), energy must be attributed to specific applications sharing the infrastructure \cite{baneshi2024analyzing}. They propose a flow-based model specifically for shared infrastructure—such as routers and gateways—that attributes energy costs to specific applications based on their actual resource usage. The model focuses on the Network Interface Card (NIC), which is the primary component responsible for data transfer and energy consumption during networking. Instead of just measuring time, the model calculates the active energy an application consumes by determining its "fair share" of the NIC's workload
 
 $$
     E_{active}^{sh} = \sum_{k \in Intervals} \left( BW \times T_{k} \times \frac{P_{max} - P_{idle}}{BW_{agg}} \right)
 $$
 
-where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the total aggregated bandwidth of the interface, $T_k$ is the duration of the active interval, and $P_{max}$ and $P_{idle}$ denote the power consumption states of the device. This formulation allows for fine-grained energy accounting in multi-tenant scenarios where simple time-based metrics fail to distinguish between concurrent workloads.
-
+where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the total aggregated bandwidth of the interface, $T_k$ is the duration of the active interval, and $P_{max}$ and $P_{idle}$ denote the power consumption states of the device. This formulation allows for fine-grained energy accounting in multi-tenant scenarios where simple time-based metrics fail to distinguish between concurrent workloads. 
 
 
 % --- BEGIN ENERGY METRICS TABLE ---
