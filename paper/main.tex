@@ -244,12 +244,13 @@ Energy efficiency remains a critical constraint in the design of Cloud, Fog, and
 The modeling of server energy consumption is generally divided between dynamic models, which fluctuate with resource usage, and state-based models, which rely on active versus idle statuses.
 
 \subsubsection{Utilization-Based Linear Models}
-A common approach in resource scheduling is to model server energy as a linear function of CPU utilization. Jeong et al. propose a model for Federated Edge Clouds where the total energy of a server, $E^{server}$, consists of a static base load and a dynamic component proportional to the CPU load \cite{jeong2023towards}:
+A common approach in resource scheduling is to model server energy as a linear function of CPU utilization. Laso et al. adopted the mathematical framework established by Enokido et al. \cite{enokido2014extended} for their Microservice Energy Consumption and Workload Forecaster \cite{laso2025energy}. Their model calculates node power consumption based on the idle power ($E_{min}$), maximum power at full utilization ($E_{max}$), current CPU utilization ($U_{CPU}$), and the number of cores ($n_{cores}$):
 $$
-    E^{server} = E^{static}_{server} + \left( E^{max}_{server} - E^{static}_{server} \right) \times \frac{CPU^{used}}{CPU^{total}}
+E=E_{min}+\frac{E_{max}-E_{min}}{n_{cores}}\times \lceil U_{CPU}\times n_{cores} \rceil
 $$
-where $E^{static}_{server}$ represents the idle power consumption, and $E^{max}_{server}$ denotes the consumption at peak load. This approach is widely adopted for its simplicity and applicability to virtual machine (VM) scheduling. Similarly, Naha et al. utilize PlanetLab workload traces to derive energy consumption based on regression analysis of CPU utilization in Fog devices, emphasizing empirical validation over theoretical modeling \cite{naha2022multiple}.
+This formulation allows the transformation of predicted CPU utilization into precise energy consumption estimates, which Laso et al. empirically validated for microservices.
 
+Similarly, Jeong et al. proposed a model for Federated Edge Clouds where server energy is composed of a static base load and a dynamic component proportional to CPU load \cite{jeong2023towards}, aligning closely with Enokido et al.'s formulation. This linear approach is widely favored for its applicability to virtual machine (VM) scheduling due to its computational simplicity. Naha et al. further extended this concept by utilizing PlanetLab workload traces to derive energy consumption through regression analysis of CPU utilization in Fog devices, prioritizing empirical validation over purely theoretical modeling \cite{naha2022multiple}.
 
 \subsubsection{Holistic and Non-Linear Models}
 While linear models offer simplicity, recent works like the HunterPlus framework by Iftikhar et al. argue for a holistic approach that accounts for non-linear behaviors and infrastructure overheads \cite{iftikhar2023hunterplus}. They define total energy $E_{T}$ as the sum of computing hardware and cooling infrastructure:
@@ -393,7 +394,12 @@ where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the tot
         \midrule
         
         % --- DATA ROWS ---
-        
+        \cite{laso2025energy} & 
+        \xmark & \cmark & \cmark & \xmark & 
+        \cmark & \cmark & 
+        \cmark & \xmark & \xmark \\
+        \midrule
+
         \cite{baneshi2024analyzing} & 
         \cmark & \cmark & \cmark & \cmark & 
         \cmark & \xmark & 
