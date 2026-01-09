@@ -288,16 +288,18 @@ $$
 $$
 Here, $\alpha$ is a weighting parameter that enables prioritizing service coverage over raw energy savings, ensuring the system converges to a Nash Equilibrium that minimizes wasted energy while maintaining service levels.
 
-\subsection{Analytical and Physics-Based Models}
+\subsubsection{Analytical and Physics-Based Models}
 
-\subsubsection{State-Based Integral Models}
+Blablabla
+
+\paragraph{a. State-Based Integral Models}
 Moving beyond linear approximations, Saraswat et al. differentiate energy calculations across Edge, Fog, and Cloud layers. They posit that devices within the same layer share identical capabilities. The total energy $E$ is calculated by integrating power consumption over time across distinct states (idle and active) \cite{saraswat2019energy}:
 $$
     E = \int_{T_{idle}} P_{i}(t)dt + \int_{T_{active}} P_{a}(t)dt
 $$
 Here, $P_{i}(t)$ and $P_{a}(t)$ represent the power consumption per unit time in idle and active states, respectively, while $T_{idle}$ and $T_{active}$ denote the duration the device remains in each state.
 
-\subsubsection{Physics-Based Component Models}
+\paragraph{b. Physics-Based Component Models}
 Adhikari et al. offer a more granular formulation derived from circuit physics, applicable to both IoT devices and Servers. They decompose total power into CPU ($TP^C$) and Memory ($TP^M$) components. The dynamic CPU power is modeled as a function of the square of the supply voltage ($V_{dd}$) \cite{adhikari2019energy}:
 $$
     DP^C = \sum_{a=1}^{CR} \beta V_{dd}^2
