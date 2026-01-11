@@ -159,7 +159,7 @@ According to Anders Andrae, who works on sustainable ICT at Huawei Technologies 
 
 \Cref{tab:related_work} summarizes the distinctions between recent contributions in the domain of energy-aware Edge Computing. A primary differentiator among these works is the scope of the continuum coverage and the optimization technique employed.
 
-\Cref{tab:energy_metrics} summarizes
+\Cref{tab:energy_metrics} summarizes the specific energy modeling approaches found in the literature, categorizing them by the types of devices covered (IoT, Edge/Fog, Cloud), the nature of the energy components (Dynamic vs. Static), and the methodology used to derive the values (Measured, Physical Estimation, or Simulation Parameters).
 
 % --- BEGIN ROTATED LANDSCAPE TABLE ---
 \begin{sidewaystable}[htbp] % This puts the table on its own landscape page
@@ -171,69 +171,149 @@ According to Anders Andrae, who works on sustainable ICT at Huawei Technologies 
     % We define the column types. 'l' for left, 'c' for center,
     % and 'p{width}' for a paragraph column that wraps text.
 \begin{tabularx}{\textheight}{ X X ccc cccc X X X X }
- 		
- 		\toprule % Top line
- 		
- 		% --- This is the complex 2-row header ---
- 		\multirow{1}{*}{Source} & 
- 		\multirow{2}{*}{Type of Model} & 
- 		\multicolumn{3}{c}{Continuum Coverage} & 
- 		\multicolumn{4}{c}{Optimization Objectives} & 
- 		\multirow{2}{*}{Technique} & 
- 		\multirow{2}{*}{Energy Model} & 
- 		\multirow{2}{*}{Application} & 
- 		\multirow{2}{*}{Evaluation} \\
- 		
- 		% Partial lines under the multi-column headers
- 		\cmidrule(lr){3-5} \cmidrule(lr){6-9}
- 		
- 		% This is the second row of the header
- 		&  & Edge & Fog & Cloud & Energy & Cost & Latency & Other & & & & \\
- 		
- 		\midrule % Line between header and data
- 		
-        % Rows
- 		2023 \cite{jeong2023towards} &
- 		Service scheduling &
- 		\cmark & \xmark & \cmark &
- 		\cmark & \xmark & \cmark & \cmark &
- 		Reinforcement Learning \& Heuristics &
- 		Server, Link, \& Migration &
- 		Delay-sensitive services &
- 		Simulation (CloudSim SDN) \\
-        \midrule
+    \toprule % Top line
+    
+    % --- This is the complex 2-row header ---
+    \multirow{1}{*}{Source} & 
+    \multirow{2}{*}{Type of Model} & 
+    \multicolumn{3}{c}{Continuum Coverage} & 
+    \multicolumn{4}{c}{Optimization Objectives} & 
+    \multirow{2}{*}{Technique} & 
+    \multirow{2}{*}{Energy Model} & 
+    \multirow{2}{*}{Application} & 
+    \multirow{2}{*}{Evaluation} \\
+    
+    % Partial lines under the multi-column headers
+    \cmidrule(lr){3-5} \cmidrule(lr){6-9}
+    
+    % This is the second row of the header
+    &  & Edge & Fog & Cloud & Energy & Cost & Latency & Other & & & & \\
+    
+    \midrule % Line between header and data
+    
+    % Rows sorted by Year (Descending)
 
-         2022 \cite{naha2022multiple} &
- 		Resource allocation &
- 		\cmark & \cmark & \xmark &
- 		\cmark & \cmark & \cmark & \cmark &
- 		Multiple Linear Regression &
- 		Predictive Model (from CPU) &
- 		Time-sensitive IoT &
- 		Simulation (CloudSim) \\
-        \midrule
+    2025 \cite{laso2025energy} &
+    Workload prediction &
+    \cmark & \xmark & \xmark &
+    \cmark & \xmark & \xmark & \cmark &
+    BiLSTM, CNN \& Math Models &
+    CPU utilization-based (cores) &
+    Microservices &
+    Real nodes \& Azure data \\
+    \midrule
+    
+    2024 \cite{paipuri2024ceems} &
+    Monitoring stack &
+    \xmark & \xmark & \cmark &
+    \cmark & \xmark & \xmark & \cmark &
+    Software counters (RAPL/IPMI) &
+    CPU, DRAM, GPU \& Network &
+    HPC jobs \& Bare-metal &
+    Supercomputer (Jean-Zay) \\
+    \midrule
+    
+    2024 \cite{baneshi2024analyzing} &
+    Simulation approach &
+    \cmark & \xmark & \cmark &
+    \cmark & \xmark & \cmark & \cmark &
+    Enhanced iFogSim framework &
+    Computation \& NIC (Networking) &
+    Video Surveillance &
+    Simulation (iFogSim) \\
+    \midrule
 
-        2021 \cite{goudarzi2021distributed} &
- 		DAG Application placement &
- 		\cmark & \cmark & \cmark &
- 		\cmark & \xmark & \cmark & \xmark &
- 		Distributed DRL (IMPALA) &
- 		IoT Device Only &
- 	      IoT &
- 		Simulation \& Testbed \\
-        \midrule
-        
- 		2019 \cite{adhikari2019energy} &
- 		offloading strategy &
- 		\cmark & \cmark & \cmark &
- 		\cmark & \xmark & \cmark & \cmark &
- 		Firefly Alg. \& WSM &
- 		Computation \& Tx Models &
- 		Intensive IoT &
- 		Simulation (2 datasets) \& Stat. analysis \\
- 		
- 		\bottomrule % Bottom line
- 	\end{tabularx}
+    2023 \cite{jeong2023towards} &
+    Service scheduling &
+    \cmark & \xmark & \cmark &
+    \cmark & \xmark & \cmark & \cmark &
+    Reinforcement Learning \& Heuristics &
+    Server, Link, \& Migration &
+    Delay-sensitive services &
+    Simulation (CloudSim SDN) \\
+    \midrule
+
+    2023 \cite{iftikhar2023hunterplus} &
+    Task Scheduling &
+    \xmark & \cmark & \cmark &
+    \cmark & \xmark & \cmark & \cmark &
+    CNN \& Bidirectional GRU &
+    Hardware \& Cooling (PUE) &
+    Heterogeneous AI tasks &
+    Real environment (Azure VMs) \\
+    \midrule
+    
+    2022 \cite{naha2022multiple} &
+    Resource allocation &
+    \cmark & \cmark & \xmark &
+    \cmark & \cmark & \cmark & \cmark &
+    Multiple Linear Regression &
+    Predictive Model (from CPU) &
+    Time-sensitive IoT &
+    Simulation (CloudSim) \\
+    \midrule
+
+    2022 \cite{cui2022energy} &
+    Edge Server Mgmt &
+    \cmark & \xmark & \xmark &
+    \cmark & \xmark & \cmark & \cmark &
+    Potential Game Theory &
+    Switch \& PM Running costs &
+    Mobile Edge users &
+    Simulation \& Testbed \\
+    \midrule
+
+    2021 \cite{goudarzi2021distributed} &
+    DAG Application placement &
+    \cmark & \cmark & \cmark &
+    \cmark & \xmark & \cmark & \xmark &
+    Distributed DRL (IMPALA) &
+    IoT Device Only &
+      IoT &
+    Simulation \& Testbed \\
+    \midrule
+
+    2021 \cite{ahvar2021deca} &
+    Application placement &
+    \cmark & \xmark & \xmark &
+    \cmark & \cmark & \xmark & \cmark &
+    A* algorithm \& Fuzzy Sets &
+    CNs \& Network devices &
+    Microservice components &
+    Simulation (CloudSim) \\
+    \midrule
+    
+    2021 \cite{jeong2023towards} &
+    Service scheduling &
+    \cmark & \xmark & \cmark &
+    \cmark & \xmark & \cmark & \cmark &
+    Q-Learning \& Heuristics &
+    Server, Link, \& Migration &
+    Real-time services &
+    Simulation (CloudSimSDN) \\
+    \midrule
+    
+    2019 \cite{adhikari2019energy} &
+    offloading strategy &
+    \cmark & \cmark & \cmark &
+    \cmark & \xmark & \cmark & \cmark &
+    Firefly Alg. \& WSM &
+    Computation \& Tx Models &
+    Intensive IoT &
+    Simulation (2 datasets) \& Stat. analysis \\
+    \midrule
+    
+    2019 \cite{ahvar2019estimating} &
+    Estimation model &
+    \cmark & \cmark & \cmark &
+    \cmark & \xmark & \xmark & \cmark &
+    Piecewise linear taxonomy &
+    PMs, Switches, \& Cooling &
+    Continuum architectures &
+    Simulation analysis \\
+    
+    \bottomrule % Bottom line
+\end{tabularx}
  \end{sidewaystable}
  % --- END ROTATED LANDSCAPE TABLE ---
 
@@ -241,7 +321,7 @@ According to Anders Andrae, who works on sustainable ICT at Huawei Technologies 
 Energy efficiency remains a critical constraint in the design of Cloud, Fog, and Edge computing architectures. The literature proposes various mathematical models to quantify energy consumption, ranging from high-level utilization-based heuristics to low-level physics-based formulations. This section categorizes these approaches into computational energy (servers and nodes), IoT-specific constraints, communication overheads, and security-aware modeling.
 
 \subsection{Server and Cloud Energy Models}
-The modeling of server energy consumption is generally divided between dynamic models, which fluctuate with resource usage, and state-based models, which rely on active versus idle statuses.
+The modeling of server energy consumption is a multifaceted domain, encompassing diverse methodologies ranging from simplified linear approximations and utilization-based heuristics to highly granular physics-based formulations and real-time observational frameworks.
 
 \subsubsection{Utilization-Based Linear Models}
 A common approach in resource scheduling is to model server energy as a linear function of CPU utilization. Laso et al. adopted the mathematical framework established by Enokido et al. \cite{enokido2014extended} for their Microservice Energy Consumption and Workload Forecaster \cite{laso2025energy}. Their model calculates node power consumption based on the idle power ($E_{min}$), maximum power at full utilization ($E_{max}$), current CPU utilization ($U_{CPU}$), and the number of cores ($n_{cores}$):
@@ -272,6 +352,37 @@ $$
 $$
 This approach addresses the gap between estimated models and actual hardware behavior in heterogeneous environments.
 
+
+\subsubsection{Analytical and Physics-Based Models}
+
+While statistical and regression-based models are effective for high-level estimation, they often lack the granularity required to understand the underlying causes of power dissipation. Analytical and physics-based approaches aim to bridge this gap by deriving energy consumption from fundamental circuit properties or rigorous state-machine definitions. These models are particularly valuable when designing energy-efficient hardware or when precise theoretical bounds are required.
+
+\paragraph{a. State-Based Integral Models}
+Moving beyond linear approximations, Saraswat et al. differentiate energy calculations across Edge, Fog, and Cloud layers. They posit that devices within the same layer share identical capabilities. The total energy $E$ is calculated by integrating power consumption over time across distinct states (idle and active) \cite{saraswat2019energy}:
+$$
+    E = \int_{T_{idle}} P_{i}(t)dt + \int_{T_{active}} P_{a}(t)dt
+$$
+Here, $P_{i}(t)$ and $P_{a}(t)$ represent the power consumption per unit time in idle and active states, respectively, while $T_{idle}$ and $T_{active}$ denote the duration the device remains in each state.
+
+A similar state-based logic is adopted by Ahvar et al. \cite{ahvar2019estimating}, though they categorize energy consumption into static (idle) and dynamic (workload-dependent) parts. In their model, the static energy for a node or device is defined as its constant idle power consumption multiplied by the time period $T$, which serves as a discrete equivalent to the integral of a constant power state. 
+$$
+E^{static} = \sum_{i=1}^{N}(P^{idle}_i T)
+$$
+
+\paragraph{b. Physics-Based Component Models}
+Adhikari et al. offer a more granular formulation derived from circuit physics, applicable to both IoT devices and Servers. They decompose total power into CPU ($TP^C$) and Memory ($TP^M$) components. The dynamic CPU power is modeled as a function of the square of the supply voltage ($V_{dd}$) \cite{adhikari2019energy}:
+$$
+    DP^C = \sum_{a=1}^{CR} \beta V_{dd}^2
+$$
+where $CR$ is the number of cores and $\beta$ is a core-specific constant. Similarly, memory power consumption accounts for both dynamic and static factors:
+$$
+    TP^M = \underbrace{\frac{1}{2} c V_{dd}^2 f}_{\text{Dynamic}} + A_m
+$$
+where $c$ is a capacitance constant, $f$ is the frequency, and $A_m$ represents static memory power in the idle state. This formula comes from the funcdamental equation in electrical engineering for CMOS (Complementary metal-oxide-semiconductor) which most modern proessors and memory are built with. Therefore this formula is used in other works to represent power consumption in digital circuit such as in the work of Iftikhar et al. \cite{iftikhar2023hunterplus} where it is used to calculate CPU energy consumption. Furthermore, Adhikari et al. extend this model to quantify carbon footprints ($CE$) using emission factors $\gamma$:
+$$
+    CE^C(t) = \gamma_{CO_{2}}^C \times TP^C
+$$
+
 \subsubsection{Game-Theoretic Edge Server Management}
 Cui et al. address the trade-off between minimizing active physical machines and maximizing user coverage through a game-theoretic formulation  \cite{cui2022energy}. Unlike centralized optimization, they model the problem as a Potential Game where users autonomously select servers. To encourage workload consolidation, the decision benefit $B$ for a user joining server is proportional to the user density on that machine:
 $$
@@ -288,30 +399,6 @@ $$
 $$
 Here, $\alpha$ is a weighting parameter that enables prioritizing service coverage over raw energy savings, ensuring the system converges to a Nash Equilibrium that minimizes wasted energy while maintaining service levels.
 
-\subsubsection{Analytical and Physics-Based Models}
-
-Blablabla
-
-\paragraph{a. State-Based Integral Models}
-Moving beyond linear approximations, Saraswat et al. differentiate energy calculations across Edge, Fog, and Cloud layers. They posit that devices within the same layer share identical capabilities. The total energy $E$ is calculated by integrating power consumption over time across distinct states (idle and active) \cite{saraswat2019energy}:
-$$
-    E = \int_{T_{idle}} P_{i}(t)dt + \int_{T_{active}} P_{a}(t)dt
-$$
-Here, $P_{i}(t)$ and $P_{a}(t)$ represent the power consumption per unit time in idle and active states, respectively, while $T_{idle}$ and $T_{active}$ denote the duration the device remains in each state.
-
-\paragraph{b. Physics-Based Component Models}
-Adhikari et al. offer a more granular formulation derived from circuit physics, applicable to both IoT devices and Servers. They decompose total power into CPU ($TP^C$) and Memory ($TP^M$) components. The dynamic CPU power is modeled as a function of the square of the supply voltage ($V_{dd}$) \cite{adhikari2019energy}:
-$$
-    DP^C = \sum_{a=1}^{CR} \beta V_{dd}^2
-$$
-where $CR$ is the number of cores and $\beta$ is a core-specific constant. Similarly, memory power consumption accounts for both dynamic and static factors:
-$$
-    TP^M = \underbrace{\frac{1}{2} c V_{dd}^2 f}_{\text{Dynamic}} + A_m
-$$
-where $c$ is a capacitance constant, $f$ is the frequency, and $A_m$ represents static memory power in the idle state. Furthermore, Adhikari et al. extend this model to quantify carbon footprints ($CE$) using emission factors $\gamma$:
-$$
-    CE^C(t) = \gamma_{CO_{2}}^C \times TP^C
-$$
 
 \subsection{IoT and End-Device Specifics}
 IoT devices, often battery-constrained, require models that account for data readiness and latency. Goudarzi et al. introduce a formulation specifically for IoT application placement. The energy $\omega$ to execute a task is the sum of processing energy and input waiting energy \cite{goudarzi2021distributed}:
