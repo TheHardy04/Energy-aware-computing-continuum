@@ -62,7 +62,7 @@ This evolution has led to the conceptualization of the \acf{CECC}. Rather than t
 
 However, the expansion of this distributed infrastructure raises critical concerns regarding sustainability. It is estimated that by 2030, data centers alone could consume up to 8\% of the global electrical supply, a significant portion of which is still derived from non-renewable sources \cite{jones2018stop}. As a result, energy efficiency has become a primary constraint in the design of computing architectures. Addressing this requires robust mathematical models to quantify and optimize energy consumption across the entire continuum, ranging from utilization-based heuristics for servers to complex physics-based formulations for IoT devices and network infrastructure.
 
-The remainder of this article is organized as follows. \Cref{sec:background} presents an overview of the foundational computing paradigms—Cloud, Fog, and Edge—and introduces the concept of the unified Cloud-Edge Computing Continuum. \Cref{sec:energy_formulation} provides a detailed literature review of mathematical energy formulations, categorized into server and cloud models, IoT-specific constraints, and communication energy costs. Finally, the report synthesizes these findings through comparative tables summarizing key optimization objectives and measurement methodologies found in recent research.
+The remainder of this article is organized as follows. \Cref{sec:background} presents an overview of the foundational computing paradigms—Cloud, Fog, and Edge—and introduces the concept of the unified Cloud-Edge Computing Continuum. \Cref{sec:energy_formulation} provides a detailed literature review of mathematical energy formulations, categorized into server and cloud models, IoT-specific constraints, communication energy costs, and evaluation methods including simulators and testbeds. Finally, the report synthesizes these findings through comparative tables summarizing key optimization objectives and measurement methodologies found in recent research.
 
 \section{Introduction on Edge/Fog Computing}\label{sec:background}
 
@@ -154,7 +154,7 @@ The \acf{CECC} (also known as the Digital Continuum or Transcontinuum) represent
 
 This integrated model facilitates a logical and efficient processing pipeline. Typically, data is first generated and preprocessed directly on Edge devices to handle time-sensitive actions. From there, intermediate Fog nodes can perform further processing and partial aggregation. Finally, computationally intensive workloads such as Big Data analytics, large-scale AI model training, or complex global simulations are transferred to the HPC-enabled Cloud data centers that possess the necessary resources \cite{rosendo2022distributed}.
 
-These infrastructural federations, are seen as the critical computing fabric for modern digital society as the Europe Commission views the Continuum as a key strategic technology to drive the region's digital transformation \cite{montevecchi2020energy}.
+These infrastructural federations, are seen as the critical computing fabric for modern digital society as the Europe Commission views the Continuum as a key strategic technology to drive the region's digital transformation \cite{montevecchi2020energy}. 
 
 \section{Literature review: Devices Energy Formulation}\label{sec:energy_formulation}
 % De voir les papiers comment ils l'ont modélisé
@@ -450,12 +450,24 @@ where $BW_i$ is the bandwidth consumed by the application, $BW_{agg}$ is the tot
 
 \subsection{Benchmark}
 
-\subsubsection{Simulation Tools and Frameworks}
 
-Simulations provide a scalable, cost-effective alternative to physical measurements in complex, highly distributed environments. It model new research ideas for parts of a system (processor, memory, accelerator and others) or a complete system and estimate metrics such as performance and energy \cite{muralidhar2022energy}.
+\subsubsection{Simulation Tools and Frameworks} Simulations provide a scalable, cost-effective alternative to physical measurements in complex, highly distributed environments. They allow researchers to model new ideas for system components (processors, memory, accelerators) or complete systems to estimate metrics such as performance and energy \cite{muralidhar2022energy}.
 
-\paragraph{iFogSim} \cite{gupta2017ifogsim}
-Built upon 
+\paragraph{CloudSim and its Extensions \cite{calheiros2011cloudsim}} As the de-facto standard for cloud modeling, CloudSim has been extended through various projects to address specific modeling needs. \textbf{CloudSimSDN} \cite{son2015cloudsimsdn} extends the base framework to simulate Software-Defined Networking (SDN) features, allowing for the evaluation of network-aware VM placement policies and energy savings in SDN-enabled data centers. It was used by Jeong et al. \cite{jeong2023towards}. \textbf{EdgeCloudSim} \cite{sonmez2018edgecloudsim} extends CloudSim to address specific edge computing challenges such as mobility, dynamic networks, and load generation. It enables the evaluation of IoT applications and edge services by characterizing mobility and network models. A key component is the Edge Orchestrator, which handles resource management decisions. EdgeCloudSim is extensible, configurable, and generates CSV logs for analysis. However, it currently supports only partial scalability (tier-based clustering) and lacks comprehensive energy models for the entire continuum, though future extensions aim to address energy, task failures, and VM migration. \textbf{iFogSim} \cite{gupta2017ifogsim} is specifically designed to model Fog and Edge architectures, enabling researchers to evaluate resource management policies. Recent enhancements have significantly expanded its capabilities: Baneshi et al. integrated flow-based networking energy models (using flow-based and time-based approaches for NICs) alongside computation energy to provide end-to-end sustainability estimates \cite{baneshi2024analyzing}. Furthermore, \textbf{iFogSim2} \cite{mahmud2022ifogsim2} addresses the dynamic nature of the continuum by introducing modular components for mobility management (handling service migration as devices move), dynamic node clustering (enabling distributed resource sharing), and microservice orchestration. Unlike the original version, iFogSim2 supports the direct integration of real-world datasets (e.g., EUA dataset) and optimizes simulation performance, reducing memory usage and execution time by approximately 28\%.
+
+\paragraph{Specialized and Hybrid Simulators} Beyond general-purpose cloud simulators, specialized tools address specific layers of the continuum. NS-3 is widely utilized for detailed, low-level device networking simulations, offering high fidelity for communication protocols but often lacking high-level application modeling \cite{baneshi2024analyzing}. In contrast, SimGrid offers highly accurate modeling for distributed systems, including virtual machines and server energy consumption, though it typically lacks native components for detailed network energy modeling in Fog scenarios \cite{ahvar2019estimating}.
+
+\paragraph{AI-Integrated Environments} Modern frameworks support the training of intelligent schedulers. COSCO (Container Orchestration using Co-simulation) \cite{tuli2021cosco} allows for the development and testing of AI-based scheduling policies (e.g., Reinforcement Learning) in integrated Edge, Fog, and Cloud environments \cite{iftikhar2023hunterplus}. Similarly, interfaces like OpenAI Gym \cite{brockman2016openai} are now being used to train advanced schedulers (such as CNN or RL models) to adapt to non-stationary settings where workload characteristics change erratically \cite{goudarzi2021distributed}.
+
+\subsubsection{Experimental Testbeds}
+
+\paragraph{Grid'5000 \cite{cappello2005grid}} 
+French large-scale experimental testbed that is a primary resource for obtaining high-precision energy profiles of compute nodes. Researchers use it to conduct stress benchmarks on heterogeneous hardware, recording power consumption per loaded core with external wattmeters accurate to 0.125 Watts \cite{ahvar2019estimating}. Grid'5000 is internationally recognized and serves as a foundation for new scale platforms such as FutureGrid in the USA \cite{balouek2012adding}.
+
+\paragraph{Edge-Specifig Clusers}
+Many studies utilize custom-built testbeds consisting of heterogeneous hardware like Raspberry Pis and Jetson Nanos to mirror real-world Edge deployments \cite{laso2025energy,goudarzi2021distributed,saraswat2019energy}. 
+
+\paragraph{Public Cloud Infrastructure} Virtual machines from providers such as Azure (Standard B2s) are also used to test schedulers in a hybrid Cloud-Fog context \cite{iftikhar2023hunterplus}.
 
 % --- BEGIN ENERGY METRICS TABLE ---
 \begin{table}[H]
