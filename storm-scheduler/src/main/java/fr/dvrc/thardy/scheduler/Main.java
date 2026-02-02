@@ -9,21 +9,21 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        // 1. Build the Topology (Wire your Spouts/Bolts)
+        // Build the Topology
         TopologyBuilder builder = new TopologyBuilder();
         builder.setSpout("sensor-spout", new SensorSpout());
         builder.setBolt("monitor-bolt", new EnergyMonitorBolt())
                 .shuffleGrouping("sensor-spout");
 
-        // 2. Configure
+        // Configure
         Config config = new Config();
         config.setDebug(true);
-        config.setNumWorkers(2); // Use 2 worker processes (relevant for Cluster/Scheduler research)
+        config.setNumWorkers(2);
 
         // 3. Decide: Local vs Remote based on arguments
         if (args.length > 0 && args[0].equals("local")) {
 
-            // --- LOCAL MODE (IntelliJ) ---
+            // --- LOCAL MODE ---
             System.out.println("Running in LOCAL mode...");
             try (LocalCluster cluster = new LocalCluster()) {
                 cluster.submitTopology("test-topology", config, builder.createTopology());
