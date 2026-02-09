@@ -30,6 +30,8 @@ import java.util.Random;
  *
  *   Cluster:
  *     java ... RandomNumber6BoltsCpuRateTopology <topologyName> 100
+ *
+ * @author Daniel Wladdimiro
  */
 public class TestTopology {
 
