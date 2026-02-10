@@ -90,7 +90,7 @@ public class DemoScheduler implements IScheduler {
      *
      * @return The scheduler's configuration.
      */
-    public Map config() {
+    public Map<String, Object> config() {
         // Return the configuration map used by this scheduler
         return this.conf;    }
 

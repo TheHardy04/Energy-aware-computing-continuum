@@ -1,4 +1,4 @@
-package fr.dvrc.thardy.scheduler;
+package fr.dvrc.thardy.topology;
 
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
@@ -204,17 +204,6 @@ public class TestTopology {
         // Pass spout rate as a parameter (config)
         conf.put(SPOUT_RATE_CONF, rateEps);
 
-        if (clusterMode) {
-            StormSubmitter.submitTopology(topologyName, conf, builder.createTopology());
-        } else {
-            LocalCluster cluster = new LocalCluster();
-            cluster.submitTopology(topologyName, conf, builder.createTopology());
-
-            // Run for 60 seconds, then shut down
-            Utils.sleep(60_000);
-
-            cluster.killTopology(topologyName);
-            cluster.shutdown();
-        }
+        StormSubmitter.submitTopology(topologyName, conf, builder.createTopology());
     }
 }

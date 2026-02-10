@@ -2,6 +2,7 @@
 
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
+TOPOLOGY_CLASS="fr.dvrc.thardy.topology.TestTopology"
 
 # Clean and build the project using Maven
 echo "==================== Building Test Topology... ===================="
@@ -18,7 +19,7 @@ then
         echo "⚠️  'storm' command not found. Please ensure Apache Storm is installed and added to your PATH."
         exit 1
     fi
-    storm jar "$SCHEDULER_JAR" fr.dvrc.thardy.scheduler.TestTopology TestTopology
+    storm jar "$SCHEDULER_JAR" "$TOPOLOGY_CLASS"
     if [ $? -eq 0 ]
     then
         echo "✅ Topology submitted successfully!"
