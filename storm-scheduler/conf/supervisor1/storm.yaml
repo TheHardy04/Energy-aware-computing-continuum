@@ -1,0 +1,8 @@
+storm.zookeeper.servers: ["127.0.0.1"]
+nimbus.seeds: ["127.0.0.1"]
+storm.local.dir: "/tmp/storm-supervisor1"
+supervisor.slots.ports: [6700]
+supervisor.thrift.port: 6627
+logviewer.port: 8000
+supervisor.scheduler.meta:
+    type: "server"
