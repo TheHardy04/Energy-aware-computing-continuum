@@ -100,7 +100,4 @@ public class DemoScheduler implements IScheduler {
      */
     public void cleanup() {
     }
-
-
-
 }

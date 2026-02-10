@@ -2,3 +2,7 @@ __pycache__/
 
 .vscode/
 .idea/
+
+# Ignore Storm logs and temp data
+logs/
+/tmp/storm-*
