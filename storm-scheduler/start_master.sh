@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # --- CONFIGURATION ---
-# Adjust these paths if installation differs
-ZK_HOME="/usr/local/zookeeper/"
-STORM_HOME="/usr/local/apache-storm-2.8.3/"
-LOG_DIR="logs"
+
+# Load environment variables
+source ./env.sh
 
 mkdir -p "$LOG_DIR"
 

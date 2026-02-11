@@ -2,7 +2,9 @@
 
 ## Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
-STORM_LIB_DIR="/usr/local/apache-storm-2.8.3/lib/"
+
+# Load environment variables
+source ./env.sh
 
 # Clean and build the project using Maven
 echo "==================== Building Schedulers... ===================="
