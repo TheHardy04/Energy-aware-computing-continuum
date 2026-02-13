@@ -1,6 +1,5 @@
 \documentclass[11pt]{article}
-
-\bibliographystyle{ieeetr}
+\bibliographystyle{ieeetr}% Conserver cette ligne pour la version finale
 
 \usepackage{graphicx} % Required for inserting images
 \usepackage{hyperref}
@@ -54,13 +53,11 @@
 
 % Talk about IoT
 
-\acf{CC} has established itself as the ubiquitous backbone of modern computing environments, offering scalable storage and processing power that enables organizations to access vast resources without significant upfront capital expenditure. While this centralized model provides the elasticity required for computation-intensive applications, it increasingly faces limitations driven by the explosive growth of the \acf{IoT}. With projections indicating that the number of interconnected devices will reach approximately 125 billion by 2030, the massive volume of data generated threatens to cause significant network congestion and high latency when processed solely by remote cloud servers.
+\ac{CC} has established itself as the ubiquitous backbone of modern computing environments, providing the scalable resources necessary for computation-intensive applications. However, this centralized model faces a critical sustainability limit driven by the explosive growth of the \ac{IoT}. With projections indicating tens of billions of connected devices by 2030, relying solely on remote cloud servers necessitates transporting massive volumes of data across the network. This reliance on centralized processing not only induces significant latency and congestion but also incurs a substantial, often overlooked, energy cost associated with the network infrastructure and data transport itself. It is estimated that by 2030, data centers alone could consume up to 8\% of the global electrical supply, a significant portion of which is still derived from non-renewable sources \cite{jones2018stop}.
 
 To address these challenges, \acf{EC} and \acf{FC} have emerged as essential paradigms that complement the traditional cloud architecture. By migrating data processing tasks closer to the data sources—such as on-device processing or intermediate network gateways—these architectures significantly reduce latency and bandwidth consumption.
 
-This evolution has led to the conceptualization of the \acf{CECC}. Rather than treating Cloud, Fog, and Edge as rigid, separate layers, the Continuum views them as a single, cohesive infrastructure. This unified approach allows for the dynamic placement of tasks across the infrastructure based on specific requirements, such as real-time processing needs or privacy constraints.
-
-However, the expansion of this distributed infrastructure raises critical concerns regarding sustainability. It is estimated that by 2030, data centers alone could consume up to 8\% of the global electrical supply, a significant portion of which is still derived from non-renewable sources \cite{jones2018stop}. As a result, energy efficiency has become a primary constraint in the design of computing architectures. Addressing this requires robust mathematical models to quantify and optimize energy consumption across the entire continuum, ranging from utilization-based heuristics for servers to complex physics-based formulations for IoT devices and network infrastructure.
+This evolution has led to the conceptualization of the \acf{CECC}. Rather than treating Cloud, Fog, and Edge as rigid, separate layers, the Continuum views them as a single, cohesive infrastructure. This unified approach allows for the dynamic placement of tasks across the infrastructure based on specific requirements, such as real-time processing needs or privacy constraints. Brings computing resources closer to resource-constrained IoT devices, thereby reducing bandwidth consumption and fostering an open innovation ecosystem that breaks the monopoly of proprietary cloud. Crucially, this architectural flexibility also presents a vital opportunity to reduce energy consumption: by optimizing service placement strategies, workloads can be intelligently distributed across the continuum to minimize the total power usage of digital services.
 
 The remainder of this article is organized as follows. \Cref{sec:background} presents an overview of the foundational computing paradigms—Cloud, Fog, and Edge—and introduces the concept of the unified Cloud-Edge Computing Continuum. \Cref{sec:energy_formulation} provides a detailed literature review of mathematical energy formulations, categorized into server and cloud models, IoT-specific constraints, communication energy costs, and evaluation methods including simulators and testbeds. Finally, the report synthesizes these findings through comparative tables summarizing key optimization objectives and measurement methodologies found in recent research.
 
