@@ -1,0 +1,211 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% NIWeek 2014 Poster by T. Reveyrand
+% www.microwave.fr
+% http://www.microwave.fr/LaTeX.html
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[a0paper,portrait]{baposter}
+
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{booktabs}
+\usepackage{relsize}
+
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{eqparbox}
+\usepackage{textcomp}
+
+\usepackage{tikz} % <-- important pour \background avec tikzpicture
+
+\graphicspath{{figures/}}
+
+%----------------------------------------------------------------------------------------
+%	COULEURS (palette claire et neutre)
+%----------------------------------------------------------------------------------------
+
+\definecolor{bordercol}{RGB}{80,80,80}        % Bordures
+\definecolor{headercol1}{RGB}{240,240,240}    % Header gauche (clair)
+\definecolor{headercol2}{RGB}{220,220,220}    % Header droite (gris clair)
+\definecolor{headerfontcol}{RGB}{0,0,0}       % Texte header
+\definecolor{boxcolor}{RGB}{250,250,248}      % Contenu (blanc cassé)
+
+% Couleur de fond de la page
+\definecolor{bgcol}{RGB}{252,252,250}         % Fond global très clair
+
+\begin{document}
+
+%----------------------------------------------------------------------------------------
+%	FOND DE PAGE CLAIR (remplace l'image "background")
+%----------------------------------------------------------------------------------------
+\background{
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[bgcol] (current page.south west) rectangle (current page.north east);
+\end{tikzpicture}
+}
+
+%----------------------------------------------------------------------------------------
+%	POSTER LAYOUT
+%----------------------------------------------------------------------------------------
+\begin{poster}{
+grid=false,
+borderColor=bordercol,
+headerColorOne=headercol1,
+headerColorTwo=headercol2,
+headerFontColor=headerfontcol,
+boxColorOne=boxcolor,
+headershape=roundedright,
+headerfont=\Large\sf\bf,
+textborder=rectangle,
+background=user,
+headerborder=open,
+boxshade=plain
+}
+{\includegraphics[width=0.1\textwidth]{esilv.png}}
+%
+%----------------------------------------------------------------------------------------
+%	TITLE AND AUTHOR NAME
+%----------------------------------------------------------------------------------------
+%
+{ \bf  \huge {Energy Aware Computing Continuum} \\  \Large \it An affordable PXI-based microwave non-linear characterization platform}
+{\vspace{0.3em} \smaller Théo HARDY$^1$, Farah Ait Salaht$^1$, WLADDIMIRO Daniel$^1$  \\
+\smaller $^1$\it {ESILV} \\}
+% {\includegraphics[scale=0.45]{NI.jpg}}
+
+%----------------------------------------------------------------------------------------
+%	INTRODUCTION
+%----------------------------------------------------------------------------------------
+\headerbox{Introduction}{name=introduction,column=0,row=0, span=3}{
+\begin{itemize}
+\item The goal of this research is to integrate microwave-frequency Large Signal Network Analysis capabilities with commercially available National Instruments' PXI modular instrumentation and LabVIEW environment.
+\vspace{-0.2cm}
+\item The Microwave Research Group at the University of Colorado has decades of experience in UHF through millimeter-wave transmitters, including recent X-band (10-GHz) MMIC implementations in GaN. Our aim is to extend the frequency range and capabilities of available commercial instrumentation provided by NI.
+\vspace{-0.2cm}
+\item The proposed instrumentation development will enable new types of measurements such as those required for harmonically-terminated PAs, various transmitter architectures (Doherty, outphasing and supply modulated PAs), as well as microwave transistor rectifiers.  The time-domain characterization is expected to provide dramatic improvement in RF circuit design capabilities.
+\end{itemize}
+}
+
+%----------------------------------------------------------------------------------------
+%	CALIBRATION
+%----------------------------------------------------------------------------------------
+\headerbox{Calibration}{name=calibration,column=0,below=introduction}{
+LSNA calibration algorithm consists of \textbf{3 steps} at each RF frequency:
+\begin{enumerate}
+\item A relative VNA calibration creates an error-term matrix related to ports 1 and 2:
+\begin{equation*}
+\begin{pmatrix} a_ 1 \\  b_1 \\  a_2 \\ b_2 \end{pmatrix}=K\begin{bmatrix} 1 & \beta_1  & 0 & 0\\  \gamma_1 &  \delta_1  & 0 & 0 \\ 0 & 0 & \alpha_2 & \beta_2 \\ 0 & 0 &  \gamma_2 &  \delta_2 \end{bmatrix}.\begin{pmatrix} r_ 1 \\  r_2 \\  r_3 \\ r_4 \end{pmatrix}
+\label{eq:cal_2_ports}
+\end{equation*}
+
+\item The power calibration gives $|K|$
+\item The phase calibration yields $\arg\{K\}$
+\end{enumerate}
+
+Power and phase calibration are performed at an auxiliary reference plane ($P_{aux}$) after its own 1-port SOL coaxial calibration:
+
+\begin{equation*}
+\begin{pmatrix} a_{aux} \\  b_{aux} \end{pmatrix}=K_{aux}\begin{bmatrix} 1 & \beta_{aux} \\  \gamma_{aux} &  \delta_{aux} \end{bmatrix}.\begin{pmatrix} r_1 \\  r_2  \end{pmatrix}
+\label{eq:cal_port_aux}
+\end{equation*}
+
+\begin{center}
+\includegraphics[width=0.7\linewidth]{CALIBRATION.pdf}
+\end{center}
+
+\textbf{$\Rightarrow$ Power} calibration at $P_{aux}$ reference plane requires the connection of a power sensor. According to the measured value, in $dBm$, we can calculate $|K_{aux}|$ such as:
+\begin{equation*}
+|K_{aux}|=\left|{\frac{10^{(Power-10)/20}}{ r_1 + \beta_{aux} . r_2}}\right|
+\label{eq:cal_power}
+\end{equation*}
+
+\textbf{$\Rightarrow$ Phase} calibration at $P_{aux}$ is performed by connecting a direct receiver (e.g. $r_3$) at $P_{aux}$:
+\begin{equation*}
+\arg\{K_{aux}\}=\arg\left\{{\frac{r_3}{ r_1 + \beta_{aux} . r_2}}\right\}
+\label{eq:cal_phase}
+\end{equation*}
+
+\textbf{$\Rightarrow$ Reciprocity} transfers the absolute calibration from $P_{aux}$ to ports 1 and 2 ($P1$ and $P2$):
+\begin{equation*}
+K=\pm\sqrt{1/Det\{[M]\}}
+\label{eq:reciprocity_1}
+\end{equation*}
+with
+\begin{equation*}
+M=\begin{bmatrix} 1 & \beta_1  \\  \gamma_1 &  \delta_1 \end{bmatrix}. {\left [ K_{aux}.\begin{bmatrix} 1 & \beta_{aux}  \\  \gamma_{aux} &  \delta_{aux}  \end{bmatrix} \right]}^{-1}
+\label{eq:reciprocity_2}
+\end{equation*}
+}
+
+%----------------------------------------------------------------------------------------
+%	OTHER INSTRUMENTATION
+%----------------------------------------------------------------------------------------
+\headerbox{Time-domain instrumentation for non-linear devices}{name=instruments,span=2,column=1,row=1, below=introduction}{
+\begin{center}
+\resizebox{0.9\textwidth}{!}{\begin{minipage}{\textwidth}
+\begin{tabular}{l l l l}
+\toprule
+\textbf{Name} & \textbf{Manufacturer} & \textbf{Receivers} & \textbf{Availability}\\
+\midrule
+MTA (requires two synchronized) & HP & Sampler & Discontinued \\
+LSNA & Agilent & Sampler & Discontinued \\
+PNA-X + Nonlinear option & Agilent & Mixer & \$\$ \\
+ZVA + Nonlinear option & Rohde and Schwarz & Mixer &  \$\$ \\
+SWAP X-402 & VTD & Sampler & Discontinued \\
+\bottomrule
+\end{tabular}
+\end{minipage}}
+\end{center}
+}
+
+%----------------------------------------------------------------------------------------
+%	MIXER vs. SAMPLERS
+%----------------------------------------------------------------------------------------
+\headerbox{Receiver: Mixer vs. Sampler}{name=receiver,span=2,column=1,row=1, below=instruments}{
+\begin{center}
+\includegraphics[width=1\linewidth]{RECEIVER.pdf}
+\end{center}
+}
+
+%----------------------------------------------------------------------------------------
+%	MEASUREMENT SETUP
+%----------------------------------------------------------------------------------------
+\headerbox{Measurement Setup for Envelope Tracking Application}{name=application,span=2,column=1,below=receiver}{
+The setup includes \textbf{two LSNAs simultaneously}. One is dedicated to RF (sampler based downconversion), the other one samples directly the LF stimulus. The purpose is to investigate \textbf{low-frequencies $S_{22}$} of the DUT under RF large signal conditions.
+\begin{center}
+\includegraphics[width=\linewidth]{BENCH.pdf}
+\small \textit{Low-frequency measurement of drain supply envelope-bandwidth impedance for supply-modulated PAs}
+\end{center}
+}
+
+%----------------------------------------------------------------------------------------
+%	CONCLUSION
+%----------------------------------------------------------------------------------------
+\headerbox{Conclusion}{name=conclusion,column=1,below=application,span=2}{
+This new project will enable a new RF measurement capability by enabling an instrument that currently does not exist on the market. Some additional benefits include:
+\vspace{-0.2cm}
+\begin{itemize}
+\item frequency range extension of NI RF instrument products currently available;
+\vspace{-0.2cm}
+\item sampler architecture offers a unique multi-scale time analysis possibility (e.g. signal and carrier domains);
+\vspace{-0.2cm}
+\item can be implemented with various ADCs and downconverters (e.g. THAs);
+\vspace{-0.2cm}
+\item 100\% LabVIEW environment;
+\vspace{-0.2cm}
+\item goal is to offer open-source LabVIEW software for user measurement flexibility.
+\end{itemize}
+}
+
+%----------------------------------------------------------------------------------------
+%	ACKNOWLEDGEMENTS
+%----------------------------------------------------------------------------------------
+\headerbox{Acknowledgements}{name=acknowledgements,column=0,below=conclusion, above=bottom,span=3}{
+\smaller
+This work is funded by National Instruments (Dr. Truchard) through a charitable donation. We would like to acknowledge DARPA (Dr. Greene) and ONR (Dr. Maki) for funding the initial part of this work under grant N00014-11-1-0931. \hfill \tiny \textit{Poster downloaded from} \textbf{www.microwave.fr}
+}
+
+\end{poster}
+
+\end{document}
