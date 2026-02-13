@@ -27,13 +27,14 @@
 %----------------------------------------------------------------------------------------
 
 \definecolor{bordercol}{RGB}{80,80,80}        % Bordures
-\definecolor{headercol1}{RGB}{240,240,240}    % Header gauche (clair)
-\definecolor{headercol2}{RGB}{220,220,220}    % Header droite (gris clair)
-\definecolor{headerfontcol}{RGB}{0,0,0}       % Texte header
+\definecolor{esilvcol}{RGB}{206,16,82}        % ESILV color #CE1052
+\definecolor{headercol1}{RGB}{206,16,82}      % Header gauche (ESILV)
+\definecolor{headercol2}{RGB}{206,16,82}      % Header droite (ESILV)
+\definecolor{headerfontcol}{RGB}{255,255,255}% Texte header (blanc)
 \definecolor{boxcolor}{RGB}{250,250,248}      % Contenu (blanc cassé)
 
 % Couleur de fond de la page
-\definecolor{bgcol}{RGB}{252,252,250}         % Fond global très clair
+\definecolor{bgcol}{RGB}{252,252,250}         % Fond global très clair      
 
 \begin{document}
 
@@ -69,7 +70,7 @@ boxshade=plain
 %	TITLE AND AUTHOR NAME
 %----------------------------------------------------------------------------------------
 %
-{ \bf  \huge {Energy Aware Computing Continuum} \\  \Large \it An affordable PXI-based microwave non-linear characterization platform}
+{ \bf  \huge {Energy Aware Computing Continuum} \\  \Large \it Energy Modeling Across the Cloud-Edge Computing Continuum, Comparative Synthesis and practical guideline}
 {\vspace{0.3em} \smaller Théo HARDY$^1$, Farah Ait Salaht$^1$, WLADDIMIRO Daniel$^1$  \\
 \smaller $^1$\it {ESILV} \\}
 % {\includegraphics[scale=0.45]{NI.jpg}}
@@ -77,18 +78,23 @@ boxshade=plain
 %----------------------------------------------------------------------------------------
 %	INTRODUCTION
 %----------------------------------------------------------------------------------------
+%----------------------------------------------------------------------------------------
+%	REVISED INTRODUCTION: THE ENERGY VS. PERFORMANCE GAP
+%----------------------------------------------------------------------------------------
 \headerbox{Introduction}{name=introduction,column=0,row=0, span=3}{
 \begin{itemize}
-\item The goal of this research is to integrate microwave-frequency Large Signal Network Analysis capabilities with commercially available National Instruments' PXI modular instrumentation and LabVIEW environment.
+\item The \textbf{Cloud-Edge Computing Continuum (CECC)} enables flexible task placement but introduces a \textbf{complex optimization landscape}. Orchestrating resources necessitates balancing strict performance constraints (latency, data locality) with the minimization of operational costs and energy consumption.
 \vspace{-0.2cm}
-\item The Microwave Research Group at the University of Colorado has decades of experience in UHF through millimeter-wave transmitters, including recent X-band (10-GHz) MMIC implementations in GaN. Our aim is to extend the frequency range and capabilities of available commercial instrumentation provided by NI.
+\item To address the fragmentation of existing metrics, this research establishes a \textbf{comprehensive taxonomy and comparative synthesis} of operational energy formulations. We analyze models based on device scope, abstraction level, and measurement methodology to identify gaps in current service placement strategies.
 \vspace{-0.2cm}
-\item The proposed instrumentation development will enable new types of measurements such as those required for harmonically-terminated PAs, various transmitter architectures (Doherty, outphasing and supply modulated PAs), as well as microwave transistor rectifiers.  The time-domain characterization is expected to provide dramatic improvement in RF circuit design capabilities.
+\item Furthermore, we bridge the gap between theory and practice by deploying a \textbf{real-world experiment on Google Cloud Platform (GCP)}. We benchmark the energy accuracy of distinct resolution paradigms—including using a multi-component Data Stream Processing (DSP) application.
 \end{itemize}
 }
 
 %----------------------------------------------------------------------------------------
-%	CALIBRATION
+%	Energy Formulation 
+% or 
+% Comparative synthesis
 %----------------------------------------------------------------------------------------
 \headerbox{Calibration}{name=calibration,column=0,below=introduction}{
 LSNA calibration algorithm consists of \textbf{3 steps} at each RF frequency:
@@ -139,9 +145,9 @@ M=\begin{bmatrix} 1 & \beta_1  \\  \gamma_1 &  \delta_1 \end{bmatrix}. {\left [ 
 }
 
 %----------------------------------------------------------------------------------------
-%	OTHER INSTRUMENTATION
+%	Experimental Setup
 %----------------------------------------------------------------------------------------
-\headerbox{Time-domain instrumentation for non-linear devices}{name=instruments,span=2,column=1,row=1, below=introduction}{
+\headerbox{Experimental s}{name=instruments,span=2,column=1,row=1, below=introduction}{
 \begin{center}
 \resizebox{0.9\textwidth}{!}{\begin{minipage}{\textwidth}
 \begin{tabular}{l l l l}
@@ -160,7 +166,7 @@ SWAP X-402 & VTD & Sampler & Discontinued \\
 }
 
 %----------------------------------------------------------------------------------------
-%	MIXER vs. SAMPLERS
+%	DSP and INFRA ARCHI
 %----------------------------------------------------------------------------------------
 \headerbox{Receiver: Mixer vs. Sampler}{name=receiver,span=2,column=1,row=1, below=instruments}{
 \begin{center}
