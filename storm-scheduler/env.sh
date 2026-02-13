@@ -28,12 +28,22 @@ fi
 export STORM_HOME
 export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
+export STORM_CONF_DIR="$STORM_HOME/conf"
 export LOG_DIR="logs"
 
 # Verify that the bin directory exists
 if [ ! -d "$STORM_BIN_DIR" ]; then
     echo "❌ Error: Storm bin directory not found at: $STORM_BIN_DIR"
     exit 1
+fi
+
+if [ -d "$STORM_CONF_DIR" ]; then
+    echo "✅ Storm conf directory found at: $STORM_CONF_DIR"
+    echo "  Copying storm.yaml to the conf directory"
+    cp "conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"
+else
+    echo "⚠️  Warning: Storm conf directory not found at: $STORM_CONF_DIR"
+    echo "   Please ensure Apache Storm is installed correctly and update the path in your .env file if needed."
 fi
 
 # Create a logs directory if it doesn't exist

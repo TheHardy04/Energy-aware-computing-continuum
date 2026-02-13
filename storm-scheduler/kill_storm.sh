@@ -14,7 +14,7 @@ kill_storm_process() {
         echo "Found $PROCESS_NAME PIDs: $PIDS"
         # Kill each PID individually to ensure they're terminated
         for PID in $PIDS; do
-            kill -9 $PID 2>/dev/null
+            kill -9 "$PID" 2>/dev/null
         done
         sleep 1
 
