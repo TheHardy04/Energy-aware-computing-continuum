@@ -6,3 +6,5 @@ __pycache__/
 # Ignore Storm logs and temp data
 logs/
 /tmp/storm-*
+
+*/build/
