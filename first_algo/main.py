@@ -5,7 +5,8 @@ from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
 from src.appProperties import AppProperties
 from src.serviceGraph import ServiceGraph
-from src.greedy import GreedyFirstFit
+from src.greedyFirstIterate import GreedyFirstIterate
+from src.greedyFirstFit import GreedyFirstFit
 from mappingUnitTest import MappingUnitTest
 
 
@@ -59,6 +60,7 @@ if __name__ == '__main__':
     app = AppProperties.from_file(app_properties_path   )
     svc = ServiceGraph.from_app_dict(app.to_dict())
 
+    # Strategy to use for placement
     strategy = GreedyFirstFit()
     result = strategy.place(svc, net, start_host=args.start_host)
 
