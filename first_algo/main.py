@@ -17,11 +17,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Demo placement runner')
     parser.add_argument('--start-host', type=int, default=None, help='Optional infra node id to start placement from')
     args = parser.parse_args()
-    # backwards-compatible CLI: parse the default properties file and print JSON
-    infra = InfraProperties.from_file()
-    print(infra.to_json(indent=2, ensure_ascii=False))
+
 
     infra = InfraProperties.from_file(infra_properties_path)
+    print(infra.to_json(indent=2, ensure_ascii=False))
+
     G = NetworkGraph.from_infra_dict(infra.to_dict())
     print("Summary:")
     G.print_summary()
