@@ -21,4 +21,5 @@ class PlacementAlgo(ABC):
         Returns:
             A placement solution in the type of PlacementResult, containing the mapping and any relevant metadata.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement place()")
+    

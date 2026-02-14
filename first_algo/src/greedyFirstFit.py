@@ -18,7 +18,7 @@ class GreedyFirstFit(PlacementAlgo):
     def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
         # Extract optional algorithm-specific parameters from kwargs
         start_host: int = kwargs.get("start_host", 0)
-        
+
         SG, NG = service_graph.G, network_graph.G
 
         # Track host resources
@@ -60,9 +60,14 @@ class GreedyFirstFit(PlacementAlgo):
             ram_req = int(d.get('ram') or 0)
             placed = False
             # Try to place near last placed component
-            last_host = mapping[list(mapping.keys())[-1]]
+            # Get last placed host
+            last_comp = list(mapping.keys())[-1]
+            last_host = mapping[last_comp]
             # Get neighbors of last_host sorted by latency
-            neighbors = sorted(NG.neighbors(last_host), key=lambda n: float(NG.edges.get((last_host, n), {}).get('latency', 0)))
+            neighbors = sorted(
+                NG.neighbors(last_host), 
+                key=lambda n: float(NG.edges.get((last_host, n), {}).get('latency', 0))
+            )
             for host in neighbors:
                 if can_host(res, host, cpu_req, ram_req):
                     # Check bandwidth/latency constraints from last_host to this host
@@ -70,7 +75,7 @@ class GreedyFirstFit(PlacementAlgo):
                     if edge_capacity_ok(edge_res, path, int(d.get('bandwidth') or 0)):
                         allocate_on_host(res, host, cpu_req, ram_req)
                         allocate_on_edges(edge_res, path, int(d.get('bandwidth') or 0))
-                        paths[(list(mapping.keys())[-1], comp)] = path
+                        paths[(last_comp, comp)] = path
                         mapping[comp] = host
                         placed = True
                         break
