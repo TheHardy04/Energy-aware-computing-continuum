@@ -15,7 +15,10 @@ class GreedyFirstFit(PlacementAlgo):
     - Returns mapping and per-edge routing meta.
     """
 
-    def place(self, service_graph : ServiceGraph, network_graph : NetworkGraph, start_host: int = 0) -> PlacementResult:
+    def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
+        # Extract optional algorithm-specific parameters from kwargs
+        start_host: int = kwargs.get("start_host", 0)
+        
         SG, NG = service_graph.G, network_graph.G
 
         # Track host resources
