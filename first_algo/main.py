@@ -1,5 +1,6 @@
 import json
 import argparse
+import os
 
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
@@ -93,4 +94,8 @@ if __name__ == '__main__':
     MappingUnitTest.run_tests(net, svc, result)
 
     # Export results 
-    ResultExporter.export_placement_to_csv(result, filename='results/placement_result.csv')
+    filename = f"results/placement_result.csv"
+    # check if directory exists, if not create it
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+    ResultExporter.export_placement_to_csv(result, filename=filename)
