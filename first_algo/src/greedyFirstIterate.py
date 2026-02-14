@@ -2,11 +2,14 @@ from typing import Dict, Any, List, Tuple
 
 import networkx as nx
 
+from src.placementAlgo import PlacementAlgo
 from src.base import PlacementResult
+from src.networkGraph import NetworkGraph
+from src.serviceGraph import ServiceGraph
 from src.utils import host_resources_snapshot, edge_ressources_snapshot, can_host, allocate_on_host, edge_capacity_ok, allocate_on_edges
 
 
-class GreedyFirstFit:
+class GreedyFirstIterate(PlacementAlgo):
     """A simple baseline placement:
     - Iterate components in order (0..n-1)
     - For each, pick the first host with enough CPU/RAM
@@ -15,12 +18,15 @@ class GreedyFirstFit:
     - Returns mapping and per-edge routing meta.
     """
 
-    def place(self, service_graph, network_graph, start_host: int = None) -> PlacementResult:
+    def place(self, service_graph : ServiceGraph, network_graph : NetworkGraph, **kwargs) -> PlacementResult:
+        # Extract optional algorithm-specific parameters from kwargs
+        start_host: int = kwargs.get("start_host", 0)
+        
         SG, NG = service_graph.G, network_graph.G
 
         # Track host resources
         res = host_resources_snapshot(network_graph)
-        # Track edge resources (bandwidth)
+        # Track edge resources 
         edge_res = edge_ressources_snapshot(network_graph)
 
         # 1) Place components

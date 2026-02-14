@@ -4,8 +4,22 @@ from src.networkGraph import *
 import copy
 
 class MappingUnitTest:
+    """
+    A collection of unit tests to validate the correctness of the mapping results.
+    """
+
     @staticmethod
     def run_tests(network_graph : NetworkGraph, service_graph : ServiceGraph, final_placement : PlacementResult):
+        """
+        Docstring for run_tests
+        
+        :param network_graph: The network graph representing the infrastructure
+        :type network_graph: NetworkGraph
+        :param service_graph: The service graph representing the application
+        :type service_graph: ServiceGraph
+        :param final_placement: The final placement result to be validated
+        :type final_placement: PlacementResult
+        """
         print("Running Mapping Unit Tests...")
         MappingUnitTest.validate_network_structure(network_graph)
         MappingUnitTest.validate_service_structure(service_graph)

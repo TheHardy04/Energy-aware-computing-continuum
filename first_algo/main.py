@@ -1,12 +1,16 @@
 import json
 import argparse
+import os
 
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
 from src.appProperties import AppProperties
 from src.serviceGraph import ServiceGraph
-from src.greedy import GreedyFirstFit
+from src.greedyFirstIterate import GreedyFirstIterate
+from src.greedyFirstFit import GreedyFirstFit
+from src.resultExporter import ResultExporter
 from mappingUnitTest import MappingUnitTest
+
 
 
 if __name__ == '__main__':
@@ -17,11 +21,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Demo placement runner')
     parser.add_argument('--start-host', type=int, default=None, help='Optional infra node id to start placement from')
     args = parser.parse_args()
-    # backwards-compatible CLI: parse the default properties file and print JSON
-    infra = InfraProperties.from_file()
-    print(infra.to_json(indent=2, ensure_ascii=False))
+
 
     infra = InfraProperties.from_file(infra_properties_path)
+    print(infra.to_json(indent=2, ensure_ascii=False))
+
     G = NetworkGraph.from_infra_dict(infra.to_dict())
     print("Summary:")
     G.print_summary()
@@ -59,7 +63,9 @@ if __name__ == '__main__':
     app = AppProperties.from_file(app_properties_path   )
     svc = ServiceGraph.from_app_dict(app.to_dict())
 
+    # Strategy to use for placement
     strategy = GreedyFirstFit()
+    # strategy = GreedyFirstIterate()
     result = strategy.place(svc, net, start_host=args.start_host)
 
     print('Placement status:', result.meta.get('status'))
@@ -86,3 +92,10 @@ if __name__ == '__main__':
     print("\n")
     # Run unit tests
     MappingUnitTest.run_tests(net, svc, result)
+
+    # Export results 
+    filename = f"results/placement_result.csv"
+    # check if directory exists, if not create it
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+    ResultExporter.export_placement_to_csv(result, filename=filename)
