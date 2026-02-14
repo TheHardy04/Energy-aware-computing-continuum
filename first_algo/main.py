@@ -7,7 +7,9 @@ from src.appProperties import AppProperties
 from src.serviceGraph import ServiceGraph
 from src.greedyFirstIterate import GreedyFirstIterate
 from src.greedyFirstFit import GreedyFirstFit
+from src.resultExporter import ResultExporter
 from mappingUnitTest import MappingUnitTest
+
 
 
 if __name__ == '__main__':
@@ -62,6 +64,7 @@ if __name__ == '__main__':
 
     # Strategy to use for placement
     strategy = GreedyFirstFit()
+    # strategy = GreedyFirstIterate()
     result = strategy.place(svc, net, start_host=args.start_host)
 
     print('Placement status:', result.meta.get('status'))
@@ -88,3 +91,6 @@ if __name__ == '__main__':
     print("\n")
     # Run unit tests
     MappingUnitTest.run_tests(net, svc, result)
+
+    # Export results 
+    ResultExporter.export_placement_to_csv(result, filename='results/placement_result.csv')

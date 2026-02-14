@@ -38,3 +38,4 @@ python main.py --start-host <node_id>
 - **Placement Algorithm**: Implements a 2 Greedy algorithms to map service components to infrastructure nodes
 - **Visualization**: Generates visual representations of the network and service graphs.
 - **Unit Testing**: Includes mapping unit tests to verify the validity of the placement.
+- **Result Exporter**: Implements a placement result exporter to export result in a CSV file.
