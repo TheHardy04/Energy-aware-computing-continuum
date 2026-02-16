@@ -20,4 +20,5 @@ tar -zxf apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to extract Apac
 mv apache-storm-$STORM_VER /usr/local/storm
 
 # Add binaries to PATH
-export PATH=$PATH:/usr/local/storm/bin
+echo 'export PATH=$PATH:/usr/local/storm/bin' | sudo tee -a /etc/profile.d/storm.sh > /dev/null
+sudo chmod +x /etc/profile.d/storm.sh
