@@ -156,7 +156,8 @@ public class CsvOneToOneScheduler implements IScheduler {
                 return out;
             }
 
-            try (CSVReader reader = new CSVReader(new FileReader(file))) {
+            try (FileReader fileReader = new FileReader(file);
+                 CSVReader reader = new CSVReader(fileReader)) {
                 String[] row;
                 boolean first = true;
 
