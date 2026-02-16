@@ -34,10 +34,6 @@ supervisor.slots.ports:
 storm.scheduler: "fr.dvrc.thardy.scheduler.DemoScheduler"
 
 # Path to the CSV file for the custom scheduler.
-# The file should be in CSV format with the following columns:
-#   component_name,host_or_supervisor_id
-# Example:
-#   my-spout-1,supervisor-01
 csv.scheduler.file: "/etc/storm/component-placement.csv"
 csv.scheduler.hasHeader: false
 
