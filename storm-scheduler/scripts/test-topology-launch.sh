@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
 TOPOLOGY_CLASS="fr.dvrc.thardy.topology.TestTopology"

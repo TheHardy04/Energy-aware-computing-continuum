@@ -29,5 +29,12 @@
             <version>${storm.version}</version>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>com.opencsv</groupId>
+            <artifactId>opencsv</artifactId>
+            <version>5.12.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

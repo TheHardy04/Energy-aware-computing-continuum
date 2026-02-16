@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Get the absolute path of the current directory
-PROJECT_ROOT=$(pwd)
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 CONF_ROOT="$PROJECT_ROOT/conf"
 LOG_DIR="$PROJECT_ROOT/logs"
 
