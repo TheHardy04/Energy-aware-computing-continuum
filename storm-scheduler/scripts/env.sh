@@ -46,7 +46,11 @@ fi
 if [ -d "$STORM_CONF_DIR" ]; then
     echo "✅ Storm conf directory found at: $STORM_CONF_DIR"
     echo "  Copying storm.yaml to the conf directory"
-    cp "$PROJECT_ROOT/conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"
+    if ! cp "$PROJECT_ROOT/conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"; then
+        echo "❌ Error: Failed to copy $PROJECT_ROOT/conf/storm.yaml to $STORM_CONF_DIR/storm.yaml"
+        echo "   Please check that the source file exists and that you have sufficient permissions."
+        exit 1
+    fi
 else
     echo "⚠️  Warning: Storm conf directory not found at: $STORM_CONF_DIR"
     echo "   Please ensure Apache Storm is installed correctly and update the path in your .env file if needed."
