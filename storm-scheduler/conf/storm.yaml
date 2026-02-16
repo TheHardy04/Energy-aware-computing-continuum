@@ -30,9 +30,14 @@ supervisor.slots.ports:
   - 6701
   - 6702
 
-storm.scheduler: "fr.dvrc.thardy.scheduler.DemoScheduler" 
+# custom scheduler class
+storm.scheduler: "fr.dvrc.thardy.scheduler.DemoScheduler"
 
-   # Rate that the topology emit a stat
+# Path to the CSV file for the custom scheduler. The file should be in the format of:
+csv.scheduler.file: "/etc/storm/component-placement.csv"
+csv.scheduler.hasHeader: false
+
+# Rate that the topology emit a stat
 topology.stats.sample.rate: 1
 
 # Frequency that Nimbus give a sample
@@ -44,9 +49,8 @@ task.heartbeat.frequency.secs: 1
 # Frequency that each executor emit a sample
 executor.metrics.frequency.secs: 1
 
-# local storage path
-storm.local.dir: "/usr/local/storm/data"
-# 
+
+
 # 
 # ##### These may optionally be filled in:
 #    

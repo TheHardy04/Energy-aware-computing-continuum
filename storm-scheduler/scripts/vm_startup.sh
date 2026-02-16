@@ -1,13 +1,9 @@
-# Storm Scheduler
+#!/bin/bash
 
-To run the Storm Scheduler, you need to have Apache Storm installed and set up. You can find the installation instructions on the official [Apache Storm website](https://storm.apache.org/index.html).
+## This script is intended to be run on a VM startup to set up the environment for Apache Storm.
+## To run storm-scheduler on a VM, use the star_master.sh and start_worker.sh scripts
 
-Version `2.8.3` was used for testing.
-
-## Apache Storm Installation Steps
-
-```shell
-# Update package list and install Java 17 
+# Update package list and install Java 17
 apt-get update
 apt-get install -y openjdk-17-jdk-headless wget python3 tar
 
@@ -25,4 +21,3 @@ mv apache-storm-$STORM_VER /usr/local/storm
 
 # Add binaries to PATH
 export PATH=$PATH:/usr/local/storm/bin
-```

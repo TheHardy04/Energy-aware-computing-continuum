@@ -1,9 +1,14 @@
 #!/bin/bash
 
+## This script starts the master node components of Apache Storm: ZooKeeper, Nimbus, and the Storm UI.
+
 # --- CONFIGURATION ---
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Load environment variables
-source ./env.sh
+source "$SCRIPT_DIR/env.sh"
 
 mkdir -p "$LOG_DIR"
 

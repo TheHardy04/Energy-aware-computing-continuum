@@ -3,11 +3,16 @@
 # --- env.sh ---
 # This script sets up the environment variables for all other scripts.
 
-# Load the .env file if it exists
-if [ -f .env ]; then
-    source .env
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load the .env file if it exists (from project root)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    source "$PROJECT_ROOT/.env"
 else
-    echo "❌ Error: .env file not found."
+    echo "❌ Error: .env file not found in $PROJECT_ROOT"
     echo "   Please create one containing: STORM_HOME='/path/to/storm'"
     exit 1
 fi
@@ -29,7 +34,8 @@ export STORM_HOME
 export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
 export STORM_CONF_DIR="$STORM_HOME/conf"
-export LOG_DIR="logs"
+export PROJECT_ROOT
+export LOG_DIR="$PROJECT_ROOT/logs"
 
 # Verify that the bin directory exists
 if [ ! -d "$STORM_BIN_DIR" ]; then
@@ -40,7 +46,7 @@ fi
 if [ -d "$STORM_CONF_DIR" ]; then
     echo "✅ Storm conf directory found at: $STORM_CONF_DIR"
     echo "  Copying storm.yaml to the conf directory"
-    cp "conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"
+    cp "$PROJECT_ROOT/conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"
 else
     echo "⚠️  Warning: Storm conf directory not found at: $STORM_CONF_DIR"
     echo "   Please ensure Apache Storm is installed correctly and update the path in your .env file if needed."
