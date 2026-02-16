@@ -12,6 +12,21 @@ source "$SCRIPT_DIR/env.sh"
 
 mkdir -p "$LOG_DIR"
 
+
+# Check if netcat (nc) is installed for port checking
+if ! command -v nc &> /dev/null; then
+    echo "Error: 'nc' (netcat) is required but not installed."
+    echo "Trying to install netcat..."
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        sudo apt-get update && sudo apt-get install -y netcat-openbsd
+    fi
+fi
+
+if ! command -v nc &> /dev/null; then
+    echo "Error: 'nc' (netcat) is still not available. Please install it manually and re-run this script."
+    exit 1
+fi
+
 echo "=============== Starting Master Node Components... ==============="
 
 # 1. START ZOOKEEPER IF NEEDED
