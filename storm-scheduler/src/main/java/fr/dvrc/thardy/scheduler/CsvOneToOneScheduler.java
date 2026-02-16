@@ -151,6 +151,10 @@ public class CsvOneToOneScheduler implements IScheduler {
                 LOG.warn("Placement CSV does not exist: {}", file);
                 return out;
             }
+            if (!Files.isReadable(p)) {
+                LOG.warn("Placement CSV is not readable: {}", file);
+                return out;
+            }
 
             try (CSVReader reader = new CSVReader(new FileReader(file))) {
                 String[] row;
@@ -196,8 +200,13 @@ public class CsvOneToOneScheduler implements IScheduler {
         // 3) Soft match (vm1 vs vm1.domain, etc.)
         for (SupervisorDetails s : cluster.getSupervisors().values()) {
             String h = s.getHost();
-            if (h != null && (h.startsWith(hostOrId) || h.contains(hostOrId))) {
-                return s;
+            if (h != null) {
+                String hLower = h.toLowerCase(Locale.ROOT);
+                String keyLower = hostOrId.toLowerCase(Locale.ROOT);
+                // Match short host to FQDN or vice versa (e.g., "vm1" <-> "vm1.domain")
+                if (hLower.startsWith(keyLower + ".") || keyLower.startsWith(hLower + ".")) {
+                    return s;
+                }
             }
         }
 

@@ -49,8 +49,6 @@ task.heartbeat.frequency.secs: 1
 # Frequency that each executor emit a sample
 executor.metrics.frequency.secs: 1
 
-
-
 # 
 # ##### These may optionally be filled in:
 #    
