@@ -133,7 +133,7 @@ public class CsvOneToOneScheduler implements IScheduler {
     }
 
     @Override
-    public Map config() {
+    public Map<String, Object> config() {
         return Collections.emptyMap();
     }
 
