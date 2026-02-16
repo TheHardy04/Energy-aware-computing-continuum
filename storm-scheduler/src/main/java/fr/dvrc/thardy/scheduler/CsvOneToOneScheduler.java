@@ -29,7 +29,7 @@ public class CsvOneToOneScheduler implements IScheduler {
                 "false"
         )));
 
-        LOG.info("CsvPackByVmScheduler prepared. csvFile={}, hasHeader={}", csvFile, hasHeader);
+        LOG.info("CsvOneToOneScheduler prepared. csvFile={}, hasHeader={}", csvFile, hasHeader);
     }
 
     @Override
