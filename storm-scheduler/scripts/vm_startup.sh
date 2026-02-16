@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## This script is intended to be run on a VM startup to set up the environment for Apache Storm.
-## To run storm-scheduler on a VM, use the star_master.sh and start_worker.sh scripts
+## To run storm-scheduler on a VM, use the start_master.sh and start_worker.sh scripts
 
 # Update package list and install Java 17
 apt-get update
