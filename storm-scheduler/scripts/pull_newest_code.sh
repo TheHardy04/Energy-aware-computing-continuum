@@ -16,3 +16,5 @@ git fetch origin main
 # Pull the latest code from the main branch
 git pull origin main
 
+# make the scripts executable
+chmod +x "$SCRIPT_DIR"/*.sh
