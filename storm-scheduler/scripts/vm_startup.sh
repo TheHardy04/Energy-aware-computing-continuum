@@ -20,8 +20,8 @@ mv apache-storm-$STORM_VER /usr/local/storm
 
 # --- 4. SET PERMISSIONS AND PATHS ---
 # Give the right to everyone to read write and execute the storm directory (for simplicity in this VM setup)
-chmod -R 777 /usr/local/storm
 mkdir -p /usr/local/storm/logs
+chmod -R 777 /usr/local/storm
 
 # Add binaries to PATH
 ln -s /usr/local/storm/bin/storm /usr/bin/storm
