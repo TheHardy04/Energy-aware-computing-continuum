@@ -29,7 +29,7 @@ supervisor.slots.ports:
   - 6700
 
 # custom scheduler class
-storm.scheduler: "fr.dvrc.thardy.scheduler.DemoScheduler"
+storm.scheduler: "fr.dvrc.thardy.scheduler.DefaultSchedulerRework"
 
 # Path to the CSV file for the custom scheduler.
 csv.scheduler.file: "/etc/storm/component-placement.csv"
