@@ -3,9 +3,8 @@
 ## This script is intended to be run on a VM startup to set up the environment for Apache Storm.
 ## To run storm-scheduler on a VM, use the start_master.sh and start_worker.sh scripts
 
-# Update package list and install Java 17
-apt-get update
-apt-get install -y openjdk-17-jdk-headless wget python3 tar
+# Update package list and install Java 17 and other necessary tools
+apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim
 
 # Verify Java installation
 java -version
@@ -20,5 +19,4 @@ tar -zxf apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to extract Apac
 mv apache-storm-$STORM_VER /usr/local/storm
 
 # Add binaries to PATH
-echo 'export PATH=$PATH:/usr/local/storm/bin' | sudo tee -a /etc/profile.d/storm.sh > /dev/null
-sudo chmod +x /etc/profile.d/storm.sh
+sudo ln -s /usr/local/storm/bin/storm /usr/bin/storm

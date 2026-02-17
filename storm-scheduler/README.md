@@ -27,3 +27,16 @@ mv apache-storm-$STORM_VER /usr/local/storm
 # Add binaries to PATH
 export PATH=$PATH:/usr/local/storm/bin
 ```
+
+## GCP
+
+### To see UI
+
+On master node, run the following command to forward the port for Storm UI:
+
+```shell
+gcloud compute ssh storm-nimbus \
+    --project=<PROJECT_ID> \
+    --zone=<ZONE> \
+    -- -L 8080:localhost:8080
+```

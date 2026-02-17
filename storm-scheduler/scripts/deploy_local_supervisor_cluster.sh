@@ -28,12 +28,15 @@ for dir in "$CONF_ROOT"/supervisor*/; do
     # Run storm supervisor in the background
     # Save logs to a separate file so they don't clutter the terminal
     STORM_CONF_DIR="$dir" storm supervisor > "$LOG_DIR/$SUPERVISOR_NAME.log" 2>&1 &
-    if [ $? -eq 0 ]; then
-        echo "✅ $SUPERVISOR_NAME launched successfully! Logs are being written to $LOG_DIR/$SUPERVISOR_NAME.log"
+    SUPERVISOR_PID=$!
+    # Wait a moment to allow the supervisor to start and write logs
+    sleep 2
+    # Check if the supervisor process is still running
+    if ps -p $SUPERVISOR_PID > /dev/null; then
+        echo "Supervisor started successfully (PID: $SUPERVISOR_PID)"
     else
-        echo "❌ Failed to launch one or more supervisors. Check the logs in $LOG_DIR/ for details."
+        echo "Failed to start supervisor. Check $LOG_DIR/supervisor.log for details"
         exit 1
     fi
-    # Wait a tiny bit to prevent port collisions during startup
-    sleep 2
+
 done
