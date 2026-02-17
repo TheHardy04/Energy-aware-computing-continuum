@@ -67,6 +67,7 @@ else
     else
         echo "Failed to start Nimbus. Check $LOG_DIR/nimbus.log for details"
         exit 1
+    fi
 fi
 echo "     ✅ Nimbus launched (PID: $!). Logs in $LOG_DIR/nimbus.log"
 
