@@ -30,6 +30,12 @@ export PATH=$PATH:/usr/local/storm/bin
 
 ## GCP
 
+### Create a GCP VM
+
+When creating a VM in GCP, make sure to allow HTTP and HTTPS traffic. You can do this by selecting the appropriate checkboxes in the "Firewall" section of the VM creation form.
+
+You can use the `vm_startup.sh` script to automate the installation of Apache Storm on the VM. 
+
 ### To see UI
 
 On master node, run the following command to forward the port for Storm UI:

@@ -57,6 +57,16 @@ if nc -z localhost 6627; then
   echo "   > Nimbus is already running on port 6627."
 else
     nohup $STORM_HOME/bin/storm nimbus > "$LOG_DIR/nimbus.log" 2>&1 &
+
+    NIMBUS_PID=$!
+    # Wait a moment to allow Nimbus to start and write logs
+    sleep 5
+    # Check if the Nimbus process is still running
+    if ps -p $NIMBUS_PID > /dev/null; then
+        echo "Nimbus started successfully (PID: $NIMBUS_PID)"
+    else
+        echo "Failed to start Nimbus. Check $LOG_DIR/nimbus.log for details"
+        exit 1
 fi
 echo "     ✅ Nimbus launched (PID: $!). Logs in $LOG_DIR/nimbus.log"
 
