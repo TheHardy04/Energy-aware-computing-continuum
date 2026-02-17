@@ -35,7 +35,13 @@ export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
 export STORM_CONF_DIR="$STORM_HOME/conf"
 export PROJECT_ROOT
-export LOG_DIR="$PROJECT_ROOT/logs"
+
+# Allow LOG_DIR to be set in .env, otherwise default to project/logs
+if [ -z "$LOG_DIR" ]; then
+    export LOG_DIR="$PROJECT_ROOT/logs"
+else
+    export LOG_DIR
+fi
 
 # Verify that the bin directory exists
 if [ ! -d "$STORM_BIN_DIR" ]; then
@@ -56,5 +62,5 @@ else
     echo "   Please ensure Apache Storm is installed correctly and update the path in your .env file if needed."
 fi
 
-# Create a logs directory if it doesn't exist
-mkdir -p "$LOG_DIR"
+# Note: Log directory creation is handled by individual scripts (start_master.sh, start_worker.sh)
+# with proper error handling and permission checks

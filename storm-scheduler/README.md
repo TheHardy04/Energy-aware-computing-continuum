@@ -40,3 +40,30 @@ gcloud compute ssh storm-nimbus \
     --zone=<ZONE> \
     -- -L 8080:localhost:8080
 ```
+
+## Troubleshooting
+
+### Permission Denied Error for Logs
+
+If you encounter an error like:
+```
+Permission denied: /path/to/logs/supervisor.log
+```
+
+**Solution 1: Manually fix permissions**
+```bash
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+# Give yourself write permissions
+chmod -R u+rwx logs
+
+# Or, if needed, take ownership
+sudo chown -R $USER logs
+```
+
+**Solution 2: Use a different log directory**
+Edit the `.env` file and add:
+```
+LOG_DIR=/tmp/storm-logs
+```
