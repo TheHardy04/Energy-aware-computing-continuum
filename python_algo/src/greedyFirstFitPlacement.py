@@ -124,8 +124,14 @@ class GreedyFirstFit(PlacementAlgo):
                         if (curr_comp, next_comp) not in paths:
                             dst_host = mapping[next_comp]
                             bw_req = int(SG.edges[(curr_comp, next_comp)].get('bandwidth') or 0)
+                            max_latency = float(SG.edges[(curr_comp, next_comp)].get('latency') or float('inf'))
                             try:
                                 p = nx.shortest_path(NG, source=curr_host, target=dst_host, weight='latency')
+                                path_latency = sum(float(NG.get_edge_data(p[i], p[i+1], default={}).get('latency', 0)) for i in range(len(p)-1))
+                                
+                                if path_latency > max_latency:
+                                     return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'latency_fail_{curr_comp}_{next_comp}'})
+                                
                                 if edge_capacity_ok(edge_res, p, bw_req):
                                     allocate_on_edges(edge_res, p, bw_req)
                                     paths[(curr_comp, next_comp)] = p
