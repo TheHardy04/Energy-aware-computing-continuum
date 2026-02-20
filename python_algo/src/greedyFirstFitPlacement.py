@@ -16,9 +16,6 @@ class GreedyFirstFit(PlacementAlgo):
     """
 
     def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
-        # Extract optional algorithm-specific parameters from kwargs
-        start_host: int = kwargs.get("start_host", 0)
-
         SG, NG = service_graph.G, network_graph.G
 
         # Track host resources
@@ -28,52 +25,81 @@ class GreedyFirstFit(PlacementAlgo):
 
         mapping: Dict[int, int] = {}
         paths: Dict[Tuple[int, int], List[int]] = {}
+        queue = []
+        enqueued = set()
 
-        # 1) Place first component on the first host that can accommodate it starting from start_host if provided
-        hosts_list = list(NG.nodes())
-        if start_host in hosts_list:
-            # rotate so start_host is first
-            idx = hosts_list.index(start_host)
-            hosts_list = hosts_list[idx:] + hosts_list[:idx]
+        # 1) Handle DZ Constraints (Hard placement)
+        dz_data = service_graph.metadata.get('component.DZ')
         
-        # Get first component and its requirements
-        first_comp = list(SG.nodes())[0]
-        cpu_req = int(SG.nodes[first_comp].get('cpu') or 0)
-        ram_req = int(SG.nodes[first_comp].get('ram') or 0)
+        # Ensure dz_data is a list
+        if dz_data is None:
+            dz_data = []
+        elif not isinstance(dz_data, list):
+            # If it's not a list, try to handle it or ignore it safely
+            dz_data = []
 
-        # Try to place first component on the first host that can accommodate it
-        placed = False
-        for host in hosts_list:
-            if can_host(res, host, cpu_req, ram_req):
-                allocate_on_host(res, host, cpu_req, ram_req)
-                mapping[first_comp] = host
-                placed = True
-                break
-        if not placed:
-            return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'no_host_for_component_{first_comp}'})
-        
-        # 2) Place remaining components iteratively, exploring from placed components
-        # We use a queue to traverse the Service Graph, ensuring valid links to predecessors
-        queue = [first_comp]
-        # Track enqueued to avoid duplicates
-        enqueued = {first_comp}
-        
-        # If the graph is disconnected, we might need to restart traversal for unvisited nodes
+        # Parse DZ list [comp, host, comp, host...]
+        if len(dz_data) >= 2:
+             for i in range(0, len(dz_data), 2):
+                if i+1 >= len(dz_data):
+                    break
+                comp_id = dz_data[i]
+                host_id = dz_data[i+1]
+                
+                # Check if host exists
+                if host_id not in NG.nodes():
+                    return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'DZ_host_not_found_{host_id}'})
+                
+                # Check component exists (optional but good)
+                if comp_id not in SG.nodes():
+                     continue # Or fail? usually ignore if component not in current graph subset
+
+                # Check Capacity
+                cpu_req = int(SG.nodes[comp_id].get('cpu') or 0)
+                ram_req = int(SG.nodes[comp_id].get('ram') or 0)
+
+                if can_host(res, host_id, cpu_req, ram_req):
+                    allocate_on_host(res, host_id, cpu_req, ram_req)
+                    mapping[comp_id] = host_id
+                    queue.append(comp_id)
+                    enqueued.add(comp_id)
+                else:
+                    return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'DZ_capacity_fail_{comp_id}_on_{host_id}'})
+
+        # 2) If Queue is empty (no DZ), start with first component on first available host
         all_nodes = list(SG.nodes())
-        
+        hosts_list = list(NG.nodes())
+
+        if not queue and all_nodes:
+            first_comp = all_nodes[0]
+            cpu_req = int(SG.nodes[first_comp].get('cpu') or 0)
+            ram_req = int(SG.nodes[first_comp].get('ram') or 0)
+            
+            placed = False
+            for host in hosts_list:
+                 if can_host(res, host, cpu_req, ram_req):
+                    allocate_on_host(res, host, cpu_req, ram_req)
+                    mapping[first_comp] = host
+                    queue.append(first_comp)
+                    enqueued.add(first_comp)
+                    placed = True
+                    break
+            
+            if not placed:
+                return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'no_host_for_start_component_{first_comp}'})
+
+        # 3) BFS / Greedy Traversal
         while len(mapping) < len(all_nodes):
             if not queue:
-                # Disconnected component case: find first unplaced node
+                # Disconnected components handling
+                # Find first unplaced node
                 for n in all_nodes:
                     if n not in mapping:
-                        # Place it like the first component (Step 1 logic simplified)
-                        # Find any host
+                        # Place it on any available host
                         cpu_req = int(SG.nodes[n].get('cpu') or 0)
                         ram_req = int(SG.nodes[n].get('ram') or 0)
                         placed_new_root = False
                         
-                        # Try to place near start_host if possible, or iterate all
-                        # We reuse hosts_list (rotated) or just NG.nodes()
                         for h in hosts_list:
                             if can_host(res, h, cpu_req, ram_req):
                                 allocate_on_host(res, h, cpu_req, ram_req)
@@ -85,8 +111,7 @@ class GreedyFirstFit(PlacementAlgo):
                         if not placed_new_root:
                              return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'no_host_for_disconnected_{n}'})
                         break
-
-            # BFS Traversal
+            
             while queue:
                 curr_comp = queue.pop(0)
                 curr_host = mapping[curr_comp]

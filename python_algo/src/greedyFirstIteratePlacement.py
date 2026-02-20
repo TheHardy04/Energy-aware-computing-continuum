@@ -12,15 +12,14 @@ from src.utils import host_resources_snapshot, edge_ressources_snapshot, can_hos
 class GreedyFirstIterate(PlacementAlgo):
     """A simple baseline placement:
     - Iterate components in order (0..n-1)
-    - For each, pick the first host with enough CPU/RAM
+    - If a component has a DZ hard constraint, place it there.
+    - Otherwise, for each, pick the first host with enough CPU/RAM
     - After mapping all nodes, validate each service edge by finding a path that meets BW/latency
       using shortest path (by latency) and checking capacities.
     - Returns mapping and per-edge routing meta.
     """
 
-    def place(self, service_graph : ServiceGraph, network_graph : NetworkGraph, **kwargs) -> PlacementResult:
-        # Extract optional algorithm-specific parameters from kwargs
-        start_host: int = kwargs.get("start_host", 0)
+    def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
         
         SG, NG = service_graph.G, network_graph.G
 
@@ -31,24 +30,51 @@ class GreedyFirstIterate(PlacementAlgo):
 
         # 1) Place components
         mapping: Dict[int, int] = {}
-        # Prepare host iteration order. If start_host is provided and exists
         hosts_list = list(NG.nodes())
-        if start_host is not None and start_host in hosts_list:
-            # rotate so start_host is first
-            idx = hosts_list.index(start_host)
-            hosts_list = hosts_list[idx:] + hosts_list[:idx]
 
+        # Pre-process DZ constraints
+        dz_data = service_graph.metadata.get('component.DZ')
+        dz_map: Dict[int, int] = {} # comp_id -> host_id
+
+        if dz_data and isinstance(dz_data, list) and len(dz_data) >= 2:
+             for i in range(0, len(dz_data), 2):
+                if i+1 >= len(dz_data):
+                    break
+                comp_id = dz_data[i]
+                host_id = dz_data[i+1]
+                dz_map[comp_id] = host_id
+        
         # Iterate components in order and place on first-fit host
-        for comp, d in SG.nodes(data=True):
+        for comp in SG.nodes():
+            d = SG.nodes[comp]
             cpu_req = int(d.get('cpu') or 0)
             ram_req = int(d.get('ram') or 0)
+            
+            # Check if hard constraint exists
+            target_host = dz_map.get(comp)
+            
             placed = False
-            for host in hosts_list:
-                if can_host(res, host, cpu_req, ram_req):
-                    allocate_on_host(res, host, cpu_req, ram_req)
-                    mapping[comp] = host
+            
+            if target_host is not None:
+                # Must place here
+                if target_host not in NG.nodes():
+                     return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'DZ_host_not_found_{target_host}'})
+                
+                if can_host(res, target_host, cpu_req, ram_req):
+                    allocate_on_host(res, target_host, cpu_req, ram_req)
+                    mapping[comp] = target_host
                     placed = True
-                    break
+                else:
+                    return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'DZ_capacity_fail_{comp}_on_{target_host}'})
+            else:
+                # Try first fit on any host
+                for host in hosts_list:
+                    if can_host(res, host, cpu_req, ram_req):
+                        allocate_on_host(res, host, cpu_req, ram_req)
+                        mapping[comp] = host
+                        placed = True
+                        break
+            
             if not placed:
                 return PlacementResult(mapping=mapping, paths={}, meta={'status': 'failed', 'reason': f'no_host_for_component_{comp}'})
 

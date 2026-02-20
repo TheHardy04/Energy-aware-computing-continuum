@@ -5,13 +5,6 @@ from src.base import PlacementResult
 from src.serviceGraph import ServiceGraph
 from src.networkGraph import NetworkGraph
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
-)
-logger = logging.getLogger(__name__)
 
 class MappingValidator:
     """
@@ -20,24 +13,27 @@ class MappingValidator:
     It collects all errors found during validation instead of stopping at the first failure.
     """
 
-    def __init__(self, network_graph: NetworkGraph, service_graph: ServiceGraph, final_placement: PlacementResult):
+    def __init__(self, network_graph: NetworkGraph, service_graph: ServiceGraph, final_placement: PlacementResult, logger: Optional[logging.Logger] = None):
         self.network_graph = network_graph
         self.service_graph = service_graph
         self.final_placement = final_placement
         self.errors: List[str] = []
+        self.logger = logger
 
     def _assert(self, condition: bool, message: str):
         """Helper to collect errors instead of raising exceptions immediately."""
         if not condition:
             self.errors.append(message)
-            logger.error(message)
+            if self.logger:
+                self.logger.error(message)
 
     def validate(self) -> bool:
         """
         Runs all validation checks.
         Returns True if all checks pass, False otherwise.
         """
-        logger.info("Starting Mapping Validation...")
+        if self.logger:
+            self.logger.info("Starting Mapping Validation...")
         self.errors = [] # Reset errors
 
         try:
@@ -49,16 +45,19 @@ class MappingValidator:
                 self.validate_routing_constraints()
                 self.validate_cycles()
         except Exception as e:
-            logger.exception(f"Unexpected error during validation: {e}")
+            if self.logger:
+                self.logger.exception(f"Unexpected error during validation: {e}")
             self.errors.append(f"Crash during validation: {str(e)}")
 
         if not self.errors:
-            logger.info("✅ All Mapping Validation Tests Passed!")
+            if self.logger:
+                self.logger.info("✅ All Mapping Validation Tests Passed!")
             return True
         else:
-            logger.error(f"❌ Mapping Validation Failed with {len(self.errors)} errors:")
-            for err in self.errors:
-                logger.error(f"  - {err}")
+            if self.logger:
+                self.logger.error(f"❌ Mapping Validation Failed with {len(self.errors)} errors:")
+                for err in self.errors:
+                    self.logger.error(f"  - {err}")
             return False
 
     def validate_structure(self):
@@ -69,7 +68,8 @@ class MappingValidator:
         self._assert(self.service_graph.G.number_of_edges() > 0, "Service graph has no edges")
         # Only log success if no errors were added in this step
         if not self.errors:
-            logger.info("Structure check passed.")
+            if self.logger:
+                self.logger.info("Structure check passed.")
 
     def validate_placement_integrity(self):
         """Checks if all components are placed on valid hosts."""
@@ -91,7 +91,8 @@ class MappingValidator:
                  validation_passed = False
         
         if validation_passed:
-            logger.info("Placement integrity check passed.")
+            if self.logger:
+                self.logger.info("Placement integrity check passed.")
 
     def validate_host_resources(self):
         """Checks if host CPU and RAM capacities are respected."""
@@ -124,7 +125,8 @@ class MappingValidator:
                 resource_issues += 1
         
         if resource_issues == 0:
-            logger.info("Host resource check passed.")
+            if self.logger:
+                self.logger.info("Host resource check passed.")
 
     def validate_routing_constraints(self):
         """Checks bandwidth, latency, and path continuity constraints."""
@@ -136,7 +138,8 @@ class MappingValidator:
             network_check_graph = copy.deepcopy(self.network_graph.G)
         except Exception:
             # Fallback if deepcopy fails (e.g. unpicklable objects)
-            logger.warning("Could not deepcopy network graph for bandwidth check. skipping bandwidth accumulation.")
+            if self.logger:
+                self.logger.warning("Could not deepcopy network graph for bandwidth check. skipping bandwidth accumulation.")
             network_check_graph = self.network_graph.G
 
         routing_issues = 0
@@ -209,7 +212,8 @@ class MappingValidator:
                 routing_issues += 1
 
         if routing_issues == 0:
-            logger.info("Routing constraints check passed.")
+            if self.logger:
+                self.logger.info("Routing constraints check passed.")
 
     def validate_cycles(self):
         """Checks for cycles in routing paths."""
@@ -221,12 +225,16 @@ class MappingValidator:
                 cycle_issues += 1
         
         if cycle_issues == 0:
-            logger.info("Cycle check passed.")
+            if self.logger:
+                self.logger.info("Cycle check passed.")
 
 
 # For backward compatibility or direct usage
 class MappingUnitTest:
     @staticmethod
-    def run_tests(network_graph: NetworkGraph, service_graph: ServiceGraph, final_placement: PlacementResult):
-        validator = MappingValidator(network_graph, service_graph, final_placement)
-        validator.validate()
+    def run_tests(network_graph: NetworkGraph, service_graph: ServiceGraph, final_placement: PlacementResult, logger: Optional[logging.Logger] = None) -> bool:
+        """Convenience method to run all mapping validation tests.
+        Returns True if all tests pass, False otherwise.
+        """
+        validator = MappingValidator(network_graph, service_graph, final_placement, logger=logger)
+        return validator.validate()

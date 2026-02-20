@@ -3,35 +3,35 @@ import argparse
 import os
 import logging
 
-from src.cspPlacement import CSP
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
 from src.appProperties import AppProperties
 from src.serviceGraph import ServiceGraph
 from src.greedyFirstIteratePlacement import GreedyFirstIterate
 from src.greedyFirstFitPlacement import GreedyFirstFit
+from src.cspPlacement import CSP
 from src.resultExporter import ResultExporter
+from src.evaluation import Evaluator
 from mappingUnitTest import MappingUnitTest
 
 
 
 if __name__ == '__main__':
     # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
     logger = logging.getLogger(__name__)
 
     infra_properties_path = r'properties/Infra_8nodes.properties'
     app_properties_path = r'properties/Appli_4comps.properties'
 
     parser = argparse.ArgumentParser(description='Demo placement runner')
-    parser.add_argument('--start-host', type=int, default=None, help='Optional infra node id to start placement from')
     parser.add_argument('--plot', action='store_true', help='Whether to plot the graphs')
     parser.add_argument('--verbose', action='store_true', help='Whether to print detailed graph info and results')
     parser.add_argument('--infra', type=str, default=infra_properties_path, help='Path to infrastructure properties file' \
     ' (default: properties/Infra_8nodes.properties)')
     parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
     ' (default: properties/Appli_4comps.properties)')
-    parser.add_argument('--placement-strategy', type=str, default='CSP', choices=['CSP', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
+    parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
     parser.add_argument('--to-csv', type=str, default='results/placement.csv', help='Optional path to export results as CSV')
     args = parser.parse_args()
 
@@ -90,22 +90,22 @@ if __name__ == '__main__':
         input("\nPress Enter to start placement...")
 
     ## PLACEMENT
-    logger.info("Running placement with strategy: %s", args.placement_strategy)
-    if args.placement_strategy == 'CSP':
+    logger.info("Running placement with %s stategy...", args.strategy)
+    if args.strategy == 'CSP':
         strategy = CSP()
-    elif args.placement_strategy == 'GreedyFirstFit':
+    elif args.strategy == 'GreedyFirstFit':
         strategy = GreedyFirstFit()
-    elif args.placement_strategy == 'GreedyFirstIterate':
+    elif args.strategy == 'GreedyFirstIterate':
         strategy = GreedyFirstIterate()
 
     result = strategy.place(svc, net)
     logger.info("Placement finished. Status: %s", result.meta.get('status'))
 
     ## RESULTS
-    if result.meta.get('status') == 'infeasible':
-        logger.error("Placement is infeasible!")
+    if result.meta.get('status') == 'success':
+        logger.info("Placement successful.")
     else:
-        logger.info("Placement successful!")
+        logger.warning("Placement failed. Reason: %s", result.meta.get('reason'))
 
     if args.verbose:
         print("\n========== Placement Result ==========")
@@ -131,15 +131,24 @@ if __name__ == '__main__':
         print("\n")
 
     # Run unit tests
-    MappingUnitTest.run_tests(net, svc, result)
+    is_valid = MappingUnitTest.run_tests(net, svc, result, logger=logger)
 
+    # Evaluate placement
+    logger.info("Evaluating placement...")
+    metrics = Evaluator.evaluate(net, svc, result, verbose=args.verbose)  
+
+    # Export results to CSV if requested
     if args.to_csv:
+        logger.info("Exporting placement results to CSV...")
         filename = args.to_csv
         # check if directory exists, if not create it
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         ResultExporter.export_placement_to_csv(result, filename=filename)
         logger.info(f"Placement exported to {filename}")
 
+    
     # If graphs were plotted, inform the user to close them to exit
     if args.plot:
         input("\nPlacement complete. Press Enter to close graphs and exit...")
+    
+    logger.info("Done.")

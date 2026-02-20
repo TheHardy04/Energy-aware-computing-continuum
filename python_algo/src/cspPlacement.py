@@ -16,7 +16,23 @@ P_LINK_UNIT = 1  # Energy coefficient for bandwidth * latency^2
 
 
 class CSP(PlacementAlgo):
-    """CP-SAT placement optimizing energy (node energy + link energy)."""
+    """
+    CP-SAT placement optimizing energy (node energy + link energy).
+    Base on the work of [Ait Salaht, Farah, and Nora Izri. "Optimisation Conjointe de la Réplication et du Placement des Microservices pour les Applications IoT dans le Fog Computing." ALGOTEL 2025-27èmes Rencontres Francophones sur les Aspects Algorithmiques des Télécommunications. 2025](https://hal.science/hal-05032320v1/document).
+    - Decision variables:
+        - x[c][h] = 1 if component c is placed on host h
+        - flow[l][u][v] = 1 if service link l uses physical edge (u,v)
+    - Constraints:
+        - Each component placed on exactly one host
+        - Host capacity constraints (CPU, RAM)
+        - Locality constraints (DZ)
+        - Flow conservation for each service link
+        - Bandwidth capacity on physical edges
+    - Objective: Minimize total energy = node energy + link energy
+        - Node energy = sum over hosts of (P_STATIC * is_active + P_CPU_UNIT * cpu_used)
+        - Link energy = sum over physical edges of (total_bandwidth_on_edge * latency^2)
+    - Returns mapping and per-edge routing meta.
+    """
 
     def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
         SG, NG = service_graph.G, network_graph.G
