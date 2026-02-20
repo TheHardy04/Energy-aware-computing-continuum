@@ -104,11 +104,15 @@ class NetworkGraph:
 		layout: str = 'spring',
 		show_edge_labels: bool = True,
 		show_node_info_labels: bool = True,
+		block: bool = True,
 	):
 		try:
 			import matplotlib.pyplot as plt
 		except Exception as e:
 			raise RuntimeError("matplotlib is required for drawing. Install it or disable draw().") from e
+
+		if not block:
+			plt.figure()
 
 		if layout == 'spring':
 			pos = nx.spring_layout(self.G, seed=42)
@@ -127,7 +131,7 @@ class NetworkGraph:
 
 		# Compute node colors: map to 3 colors depending on CPU value
 		palette = ['#8fce00', '#ffd966', '#e06666']  # green, yellow, red
-		t1, t2 =  (4, 8)
+		t1, t2 =  (8, 16)
 		node_colors = []
 		for _, data in self.G.nodes(data=True):
 			val = data.get('cpu', 0)
@@ -156,6 +160,6 @@ class NetworkGraph:
 			nx.draw_networkx_edge_labels(self.G, pos, edge_labels=labels, font_size=8)
 
 		plt.tight_layout()
-		plt.show()
+		plt.show(block=block)
 
 
