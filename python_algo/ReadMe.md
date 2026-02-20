@@ -29,7 +29,6 @@ python main.py
 
 You can customize the execution with the following arguments:
 
-- `--start-host <node_id>`: Specify the infrastructure node ID to start the placement from.
 - `--plot`: Enable visualization of the network and service graphs.
 - `--verbose`: Enable detailed graph info and results
 - `--infra <path>`: Path to the infrastructure properties file (default: `properties/Infra_8nodes.properties`).
@@ -49,7 +48,7 @@ python main.py --plot --verbose
 
 Run with a different infrastructure and application file using the GreedyFirstFit strategy:
 ```bash
-python main.py --infra properties/Infra_16nodes_fog3tier.properties --app properties/Appli_8comps_smartbuilding.properties --placement-strategy GreedyFirstFit
+python main.py --infra properties/Infra_16nodes_fog3tier.properties --app properties/Appli_8comps_smartbuilding.properties --strategy GreedyFirstFit
 ```
 
 ## Features
