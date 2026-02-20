@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Set, Tuple
 import networkx as nx
 
-from src.base import PlacementResult
+from src.placementAlgo import PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
 
@@ -13,6 +13,19 @@ P_CPU_UNIT = 5
 
 @dataclass
 class EvaluationMetrics:
+    """Dataclass to hold evaluation metrics for a placement result.
+    Attributes:
+        total_energy: Total energy consumption of the placement (node + link)
+        energy_node: Energy consumed by active hosts based on CPU usage
+        energy_link: Energy consumed by network links based on bandwidth and latency
+        avg_latency: Average latency across all service edges
+        worst_latency: Maximum latency among all service edges
+        total_latency: Sum of latencies across all service edges
+        active_hosts_count: Number of hosts that have at least one component placed on them
+        host_cpu_usage: Dictionary mapping host_id to total CPU used on that host
+        host_ram_usage: Dictionary mapping host_id to total RAM used on that host
+        violations: List of any constraint violations detected during evaluation (e.g., capacity overflows, missing paths)
+    """
     total_energy: float
     energy_node: float
     energy_link: float
@@ -32,6 +45,13 @@ class Evaluator:
     def evaluate(infra: NetworkGraph, app: ServiceGraph, placement: PlacementResult, verbose=False) -> EvaluationMetrics:
         """
         Evaluate the given placement result against the infrastructure and application constraints.
+        Args:
+            infra (NetworkGraph): The infrastructure graph with host and link properties.
+            app (ServiceGraph): The application graph with component and service link properties.
+            placement (PlacementResult): The result of the placement algorithm to evaluate.
+            verbose (bool): Whether to print detailed evaluation metrics.
+        Returns:
+            EvaluationMetrics: A dataclass containing energy, latency, and violation metrics.
         """
         # 1. Calculate Host Resource Usage
         host_cpu_used: Dict[int, int] = {h: 0 for h in infra.G.nodes}
@@ -149,7 +169,10 @@ class Evaluator:
     
     @staticmethod
     def print_metrics(metrics: EvaluationMetrics):
-        """Utility method to print evaluation metrics in a readable format."""
+        """Utility method to print evaluation metrics in a readable format.
+        Args:
+            metrics (EvaluationMetrics): The evaluation metrics to print.
+        """
         print("Evaluation Metrics:")
         print(f"  Total Energy: {metrics.total_energy:.2f}")
         print(f"    - Node Energy: {metrics.energy_node:.2f}")

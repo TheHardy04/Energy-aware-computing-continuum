@@ -2,8 +2,7 @@ from typing import Dict, Any, List, Tuple
 
 import networkx as nx
 
-from src.placementAlgo import PlacementAlgo
-from src.base import PlacementResult
+from src.placementAlgo import PlacementAlgo, PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
 from src.utils import host_resources_snapshot, edge_ressources_snapshot, can_host, allocate_on_host, edge_capacity_ok, allocate_on_edges

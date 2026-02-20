@@ -1,7 +1,7 @@
 import logging
 import copy
 from typing import Dict, List, Tuple, Any, Optional
-from src.base import PlacementResult
+from src.placementAlgo import PlacementResult
 from src.serviceGraph import ServiceGraph
 from src.networkGraph import NetworkGraph
 

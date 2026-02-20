@@ -3,8 +3,7 @@ from typing import Dict, Tuple, List, Any
 import networkx as nx
 from ortools.sat.python import cp_model
 
-from src.placementAlgo import PlacementAlgo
-from src.base import PlacementResult
+from src.placementAlgo import PlacementAlgo, PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
 from src.utils import edge_ressources_snapshot, edge_capacity_ok, allocate_on_edges
