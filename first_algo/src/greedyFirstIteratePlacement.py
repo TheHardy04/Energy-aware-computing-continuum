@@ -82,4 +82,4 @@ class GreedyFirstIterate(PlacementAlgo):
             }
 
         paths = {k: v['path'] for k, v in routing.items()}
-        return PlacementResult(mapping=mapping, paths=paths, meta={'status': 'ok', 'routing': routing, 'host_res': res, 'edge_res': edge_res})
+        return PlacementResult(mapping=mapping, paths=paths, meta={'status': 'success'})

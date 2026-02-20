@@ -18,7 +18,7 @@
       "t_total_s": 0.0001,
       "tokens_in": 0,
       "tokens_out": 0,
-      "e_solver_wh": 8e-07,
+      "e_solver_wh": 7.2e-07,
       "cost_usd": 0.0,
       "method": "~0 (neg.)"
     }
@@ -39,10 +39,34 @@
       "feasible": true
     },
     "solver_cost": {
-      "t_total_s": 0.1662,
+      "t_total_s": 0.1661,
       "tokens_in": 0,
       "tokens_out": 0,
-      "e_solver_wh": 0.00207801,
+      "e_solver_wh": 0.00207621,
+      "cost_usd": 0.0,
+      "method": "P*T (45W)"
+    }
+  },
+  "LLM (llama3)": {
+    "placement": {
+      "0": 5,
+      "1": 2,
+      "2": 2,
+      "3": 2
+    },
+    "metrics": {
+      "lat_e2e_ms": 20,
+      "lat_max_ms": 20,
+      "cout": 10,
+      "energie_totale": 160430,
+      "objectif": 133000,
+      "feasible": true
+    },
+    "solver_cost": {
+      "t_total_s": 0.0151,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "e_solver_wh": 0.0,
       "cost_usd": 0.0,
       "method": "P*T (45W)"
     }

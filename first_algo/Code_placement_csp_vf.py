@@ -293,7 +293,7 @@ class TPDS2_Placement:
                 m.Add(self.total_flow_on_arc[e] <= self.bwsCap[e])
 
     # === OBJECTIVE ===
-    def build_objective(self, w_lat=0.34, w_cost=0.33, w_energy=0.33):
+    def build_objective(self, w_lat=0, w_cost=0, w_energy=1):
         m = self.model
 
         # --- Latence ---
@@ -401,10 +401,10 @@ class TPDS2_Placement:
         pr = self.model.Proto()
         nv = len(pr.variables)
         nb = sum(1 for v in pr.variables if list(v.domain) == [0,1])
-        ty = Counter(c.WhichOneof("constraint") for c in pr.constraints)
+        
+        # Simplified: just count constraint types safely
         print(f"\nModele: {nv} vars ({nb} bool), {len(pr.constraints)} contraintes")
-        for t, c in sorted(ty.items(), key=lambda x: -x[1]):
-            print(f"  {t or '?'}: {c}")
+        print(f"  (constraint type breakdown skipped due to API compatibility)")
 
 
 # === MAIN ===
@@ -495,10 +495,10 @@ def main():
     sol = TPDS2_Placement()
     print("Chargement...")
     try:
-        #sol.load_data("resources/Infra_8nodes_2.properties", "resources/Appli_4comps_2.properties")
-        #sol.load_data("resources/Infra_16nodes_fog3tier.properties", "resources Appli_8comps_smartbuilding.properties")
+        # sol.load_data("properties/Infra_8nodes.properties", "properties/Appli_4comps_2.properties")
+        sol.load_data("properties/Infra_16nodes_fog3tier.properties", "properties/Appli_8comps_smartbuilding.properties")
         
-        sol.load_data("resources/Infra_24nodes_dcns.properties", "resources/Appli_10comps_dcns.properties")
+        # sol.load_data("resources/Infra_24nodes_dcns.properties", "resources/Appli_10comps_dcns.properties")
         #sol.load_data("resources/Infra_28nodes_smartcity.properties", "resources/Appli_11comps_smartcity.properties")
         
         #sol.load_data("resources/Infra_32nodes_hospital.properties", "resources/Appli_12comps_ehealth.properties")
@@ -513,7 +513,7 @@ def main():
     sol.declare_variables()
     sol.declare_constraints()
     print("Objectif...")
-    sol.build_objective(w_lat=0.34, w_cost=0.33, w_energy=0.33)
+    sol.build_objective(w_lat=0, w_cost=0, w_energy=1)
     sol.print_model_stats()
     t_build = time.time() - t_build_start
 

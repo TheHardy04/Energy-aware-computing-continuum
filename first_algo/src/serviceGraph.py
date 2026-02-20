@@ -57,17 +57,6 @@ class ServiceGraph:
 		if not nx.is_directed_acyclic_graph(obj.G):
 			raise ValueError("Service graph must be a directed acyclic graph (DAG).")
 		
-		# Check that each node has one and only one source (except for the root) and one and only one sink (except for the leaves)
-		for n in obj.G.nodes():
-			in_deg = obj.G.in_degree(n)
-			out_deg = obj.G.out_degree(n)
-			if in_deg == 0 and out_deg == 0:
-				raise ValueError(f"Component {n} is isolated (no incoming or outgoing edges).")
-			if in_deg > 1:
-				raise ValueError(f"Component {n} has multiple sources (in_degree={in_deg}).")
-			if out_deg > 1:
-				raise ValueError(f"Component {n} has multiple sinks (out_degree={out_deg}).")
-		
 		return obj
 
 	# -------- info helpers ---------
@@ -125,11 +114,15 @@ class ServiceGraph:
 		layout: str = 'spring',
 		show_edge_labels: bool = True,
 		show_node_info_labels: bool = True,
+		block: bool = True,
 	):
 		try:
 			import matplotlib.pyplot as plt
 		except Exception as e:
 			raise RuntimeError("matplotlib is required for drawing. Install it or disable draw().") from e
+
+		if not block:
+			plt.figure()
 
 		if layout == 'spring':
 			pos = nx.spring_layout(self.G, seed=42)
@@ -170,5 +163,5 @@ class ServiceGraph:
 			nx.draw_networkx_edge_labels(self.G, pos, edge_labels=labels, font_size=8)
 
 		plt.tight_layout()
-		plt.show()
+		plt.show(block=block)
 

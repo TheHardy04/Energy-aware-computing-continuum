@@ -2,12 +2,13 @@ import json
 import argparse
 import os
 
+from src.cspPlacement import CSP
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
 from src.appProperties import AppProperties
 from src.serviceGraph import ServiceGraph
-from src.greedyFirstIterate import GreedyFirstIterate
-from src.greedyFirstFit import GreedyFirstFit
+from src.greedyFirstIteratePlacement import GreedyFirstIterate
+from src.greedyFirstFitPlacement import GreedyFirstFit
 from src.resultExporter import ResultExporter
 from mappingUnitTest import MappingUnitTest
 
@@ -20,6 +21,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Demo placement runner')
     parser.add_argument('--start-host', type=int, default=None, help='Optional infra node id to start placement from')
+    parser.add_argument('--plot', action='store_true', help='Whether to plot the graphs')
+    parser.add_argument('--verbose', action='store_true', help='Whether to print detailed info during placement')
+    parser.add_argument('--infra', type=str, default=infra_properties_path, help='Path to infrastructure properties file' \
+    ' (default: properties/Infra_8nodes.properties)')
+    parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
+    ' (default: properties/Appli_4comps.properties)')
+    parser.add_argument('--placement-strategy', type=str, default='CSP', choices=['CSP', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
+    parser.add_argument('--to-csv', type=str, default='results/placement.csv', help='Optional path to export results as CSV')
     args = parser.parse_args()
 
 
@@ -37,7 +46,8 @@ if __name__ == '__main__':
     print(json.dumps(G.degree_stats(), indent=2))
     print("\nConnectivity:")
     print(json.dumps(G.connectivity_info(), indent=2))
-    G.draw()
+    if args.plot:
+        G.draw(block=False)
 
     app = AppProperties.from_file(app_properties_path)
     print("\nApp Properties:")
@@ -54,7 +64,8 @@ if __name__ == '__main__':
     print(json.dumps(service_G.degree_stats(), indent=2))
     print("\nService Graph Connectivity:")
     print(json.dumps(service_G.connectivity_info(), indent=2))
-    service_G.draw()
+    if args.plot:
+        service_G.draw(block=False)
 
     # Placement example
     infra = InfraProperties.from_file(infra_properties_path)
@@ -63,10 +74,21 @@ if __name__ == '__main__':
     app = AppProperties.from_file(app_properties_path   )
     svc = ServiceGraph.from_app_dict(app.to_dict())
 
-    # Strategy to use for placement
-    strategy = GreedyFirstFit()
-    # strategy = GreedyFirstIterate()
-    result = strategy.place(svc, net, start_host=args.start_host)
+    # wait for user input to start placement (to allow time to inspect graphs if plotted)
+    if args.plot:
+        input("\nPress Enter to start placement...")
+
+    print("\nRunning placement...")
+    # Strategy to use for placement 
+    if args.placement_strategy == 'CSP':
+        strategy = CSP()
+    elif args.placement_strategy == 'GreedyFirstFit':
+        strategy = GreedyFirstFit()
+    elif args.placement_strategy == 'GreedyFirstIterate':
+        strategy = GreedyFirstIterate()
+
+    result = strategy.place(svc, net)
+    print("\n========== Placement Result ==========")
 
     print('Placement status:', result.meta.get('status'))
     print('Path:')
@@ -87,15 +109,16 @@ if __name__ == '__main__':
         pretty = {f"{u}->{v}": info for (u, v), info in result.meta['edge_res'].items()}
         print(json.dumps(pretty, indent=2))
 
-    G.draw()
-    
     print("\n")
     # Run unit tests
     MappingUnitTest.run_tests(net, svc, result)
 
-    # Export results 
-    filename = f"results/placement_result.csv"
-    # check if directory exists, if not create it
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
-    ResultExporter.export_placement_to_csv(result, filename=filename)
+    if args.to_csv:
+        filename = args.to_csv
+        # check if directory exists, if not create it
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        ResultExporter.export_placement_to_csv(result, filename=filename)
+    
+    # If graphs were plotted, inform the user to close them to exit
+    if args.plot:
+        input("\nPlacement complete. Press Enter to exit...")
