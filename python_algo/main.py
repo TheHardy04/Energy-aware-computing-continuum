@@ -90,7 +90,7 @@ if __name__ == '__main__':
         input("\nPress Enter to start placement...")
 
     ## PLACEMENT
-    logger.info("Running placement with %s stategy...", args.strategy)
+    logger.info("Running placement with %s strategy...", args.strategy)  
     if args.strategy == 'CSP':
         strategy = CSP()
     elif args.strategy == 'GreedyFirstFit':
