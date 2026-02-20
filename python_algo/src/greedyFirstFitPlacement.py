@@ -142,8 +142,8 @@ class GreedyFirstFit(PlacementAlgo):
                     
                     # Find candidates near curr_host
                     sorted_neig = sorted(
-                        NG.neighbors(curr_host), 
-                        key=lambda n: float(NG.edges.get((curr_host, n), {}).get('latency', 0))
+                        NG.neighbors(curr_host),  
+                        key=lambda n: float(NG.get_edge_data(curr_host, n, default={}).get('latency', 0))
                     )
                     candidates = [curr_host] + sorted_neig
 
@@ -163,6 +163,12 @@ class GreedyFirstFit(PlacementAlgo):
                                 bw = int(SG.edges[(p, next_comp)].get('bandwidth') or 0)
                                 try:
                                     pth = nx.shortest_path(NG, source=p_host, target=host, weight='latency')
+                                    # Check latency constraint
+                                    max_latency = float(SG.edges[(p, next_comp)].get('latency') or float('inf'))
+                                    path_latency = sum(float(NG.get_edge_data(pth[i], pth[i+1], default={}).get('latency', 0)) for i in range(len(pth)-1))
+                                    if path_latency > max_latency:
+                                        valid_connectivity = False
+                                        break
                                     if not edge_capacity_ok(edge_res, pth, bw):
                                         valid_connectivity = False
                                         break
