@@ -32,10 +32,9 @@ You can customize the execution with the following arguments:
 - `--start-host <node_id>`: Specify the infrastructure node ID to start the placement from.
 - `--plot`: Enable visualization of the network and service graphs.
 - `--verbose`: Enable detailed graph info and results
-
 - `--infra <path>`: Path to the infrastructure properties file (default: `properties/Infra_8nodes.properties`).
 - `--app <path>`: Path to the application properties file (default: `properties/Appli_4comps.properties`).
-- `--placement-strategy <strategy>`: Choose the placement strategy. Options:
+- `--strategy <strategy>`: Choose the placement strategy. Options:
   - `CSP`: Constraint Satisfaction Problem (default).
   - `GreedyFirstFit`: Greedy First Fit algorithm.
   - `GreedyFirstIterate`: Greedy First Iterate algorithm.
