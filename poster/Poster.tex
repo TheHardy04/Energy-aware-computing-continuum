@@ -70,10 +70,10 @@ boxshade=plain
 %	TITLE AND AUTHOR NAME
 %----------------------------------------------------------------------------------------
 %
-{ \bf  \huge {Energy Aware Computing Continuum} \\  \Large \it Energy Modeling Across the Cloud-Edge Computing Continuum, Comparative Synthesis and practical guideline}
-{\vspace{0.3em} \smaller Théo HARDY$^1$, Farah Ait Salaht$^1$, WLADDIMIRO Daniel$^1$  \\
-\smaller $^1$\it {ESILV} \\}
-% {\includegraphics[scale=0.45]{NI.jpg}}
+{ \centering \bf  \huge {Energy Aware Computing Continuum} \\  \Large \it Energy Modeling Across the Cloud-Edge Computing Continuum, Comparative Synthesis and practical guideline}
+{\centering \vspace{0.3em} \smaller Théo HARDY$^1$, Farah Ait Salaht$^1$, WLADDIMIRO Daniel$^1$  \\
+\smaller $^1$\it {ESILV / DVRC} \\}  
+{\includegraphics[width=0.15\textwidth]{dvrc.png}}
 
 %----------------------------------------------------------------------------------------
 %	INTRODUCTION
@@ -82,13 +82,40 @@ boxshade=plain
 %	REVISED INTRODUCTION: THE ENERGY VS. PERFORMANCE GAP
 %----------------------------------------------------------------------------------------
 \headerbox{Introduction}{name=introduction,column=0,row=0, span=3}{
+\begin{minipage}{0.65\linewidth}
 \begin{itemize}
-\item The \textbf{Cloud-Edge Computing Continuum (CECC)} enables flexible task placement but introduces a \textbf{complex optimization landscape}. Orchestrating resources necessitates balancing strict performance constraints (latency, data locality) with the minimization of operational costs and energy consumption.
+\item \textbf{The Optimization Challenge:}
 \vspace{-0.2cm}
-\item To address the fragmentation of existing metrics, this research establishes a \textbf{comprehensive taxonomy and comparative synthesis} of operational energy formulations. We analyze models based on device scope, abstraction level, and measurement methodology to identify gaps in current service placement strategies.
+  \begin{itemize}
+  \item The \textbf{Cloud-Edge Computing Continuum (CECC)} enables flexible task placement.
+  \vspace{-0.5cm}
+  \item Orchestration must balance performance (latency, locality) with minimal energy costs.
+  \end{itemize}
+\vspace{-0.3cm}
+\item \textbf{Taxonomy and Synthesis:}
 \vspace{-0.2cm}
-\item Furthermore, we bridge the gap between theory and practice by deploying a \textbf{real-world experiment on Google Cloud Platform (GCP)}. We benchmark the energy accuracy of distinct resolution paradigms—including using a multi-component Data Stream Processing (DSP) application.
+  \begin{itemize}
+  \item Existing energy metrics are highly fragmented.
+  \vspace{-0.1cm}
+  \item We establish a \textbf{comprehensive taxonomy} of operational energy formulations.
+  \vspace{-0.1cm}
+  \item Models are analyzed by device scope, abstraction level, and measurement methodology.
+  \end{itemize}
+\vspace{-0.3cm}
+\item \textbf{Real-World Benchmarking:}
+\vspace{-0.2cm}
+  \begin{itemize}
+  \item We created \textbf{real-world experiment on Google Cloud Platform (GCP)}.
+  \vspace{-0.1cm}
+  \item We evaluate using a multi-component Data Stream Processing (DSP) application.
+  \end{itemize}
 \end{itemize}
+\end{minipage}
+\hfill
+\begin{minipage}{0.33\linewidth}
+\centering
+\includegraphics[width=\linewidth, trim={1.2cm 1.5cm 1.2cm 1.5cm}, clip]{Cloud_Fog_Edge_scheme}
+\end{minipage}
 }
 
 %----------------------------------------------------------------------------------------
