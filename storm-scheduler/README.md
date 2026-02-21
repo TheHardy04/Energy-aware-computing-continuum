@@ -1,5 +1,36 @@
 # Storm Scheduler
 
+This project implements energy-aware scheduling for Apache Storm in fog/edge/cloud computing continuum environments.
+
+## 🚀 Quick Start
+
+### Submit a Topology from Properties File (NEW!)
+
+```bash
+# Build and submit a 4-component application
+./scripts/launch-topology-from-csv.sh ../python_algo/properties/Appli_4comps.properties MyApp
+
+# Submit a DCNS surveillance application (10 components)
+./scripts/launch-topology-from-csv.sh ../python_algo/properties/Appli_10comps_dcns.properties DCNS
+```
+
+### Submit Test Topology
+
+```bash
+./scripts/test-topology-launch.sh
+```
+
+## Features
+
+1. **TopologyFromCSV** ⭐ - Generate Storm topologies from application properties files
+2. **TestTopology** - Synthetic 6-bolt benchmark topology
+3. **Custom Schedulers** - Energy-aware scheduling algorithms
+4. **Shell Scripts** - Convenient cluster management (see [scripts/README.md](scripts/README.md))
+
+---
+
+## Installation
+
 To run the Storm Scheduler, you need to have Apache Storm installed and set up. You can find the installation instructions on the official [Apache Storm website](https://storm.apache.org/index.html).
 
 Version `2.8.3` was used for testing.
