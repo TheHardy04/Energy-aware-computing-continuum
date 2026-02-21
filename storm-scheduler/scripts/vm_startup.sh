@@ -48,7 +48,7 @@ echo "Installing Java, Git, Maven, and other tools..."
 apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim
+    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv vim
 }
 
 # Install zookeeper separately (can fail on some systems)
@@ -77,10 +77,24 @@ chown -R storm:storm /usr/local/storm
 chmod -R 755 /usr/local/storm
 
 # --- GRANT STORM USER SUDO ACCESS ---
-# Allow storm user to run sudo commands without password
-echo "storm ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/storm-nopasswd
+# Add storm to sudo group
+usermod -aG sudo storm 2>/dev/null || true
+
+# Create sudoers file for NOPASSWD access
+cat > /etc/sudoers.d/storm-nopasswd << 'EOF'
+# Allow storm user to run all commands without password
+storm ALL=(ALL:ALL) NOPASSWD:ALL
+EOF
+
 chmod 0440 /etc/sudoers.d/storm-nopasswd
-echo "✓ Storm user can now run sudo commands without password"
+
+# Validate sudoers file
+if visudo -c -f /etc/sudoers.d/storm-nopasswd; then
+    echo "✓ Storm user granted sudo access without password"
+else
+    echo "⚠ Warning: sudoers file validation failed"
+    rm -f /etc/sudoers.d/storm-nopasswd
+fi
 
 # Add binaries to PATH
 ln -sf /usr/local/storm/bin/storm /usr/bin/storm
@@ -114,6 +128,13 @@ fi
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
 chown storm:storm /home/storm/.env
+
+# Setup python virtual environment for storm user
+sudo -u storm python3 -m venv /home/storm/venv
+chown -R storm:storm /home/storm/venv
+source /home/storm/venv/bin/activate
+pip install --upgrade pip || echo "⚠ Warning: pip upgrade failed, continuing with existing pip version"
+pip install -r /home/storm/Energy-aware-computing-continuum/python_algo/requirements.txt || echo "⚠ Warning: Failed to install Python dependencies, please check the requirements.txt file and your network connection."
 
 # Create placement CSV directory
 mkdir -p /etc/storm
