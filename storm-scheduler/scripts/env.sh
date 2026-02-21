@@ -14,7 +14,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 elif [ -f "$HOME/.env" ]; then
     source "$HOME/.env"
 else
-    echo "❌ Error: .env file not found in $PROJECT_ROOT"
+    echo "❌ Error: .env file not found in $PROJECT_ROOT or $HOME"
     echo "   Please create one containing: STORM_HOME='/path/to/storm'"
     exit 1
 fi

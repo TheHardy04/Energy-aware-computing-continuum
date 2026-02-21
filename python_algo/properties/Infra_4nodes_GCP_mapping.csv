@@ -1,0 +1,5 @@
+host, vm
+0, worker-server-1
+1, worker-edge-1
+2, worker-edge-2
+3, worker-edge-3

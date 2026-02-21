@@ -44,6 +44,9 @@ public class CsvOneToOneScheduler implements IScheduler {
         // component -> host (or supervisorId)
         Map<String, String> placement = readPlacementCsv(csvFile, hasHeader);
 
+        // Load VM mapping if available (host ID -> VM name)
+        Map<String, String> hostIdToVmName = loadHostMapping(csvFile);
+
         // Log available supervisors for debugging
         logAvailableSupervisors(cluster);
 
@@ -87,7 +90,7 @@ public class CsvOneToOneScheduler implements IScheduler {
                 String hostOrId = entry.getKey();
                 List<ExecutorDetails> execsForHost = entry.getValue();
 
-                SupervisorDetails sup = resolveSupervisor(cluster, hostOrId);
+                SupervisorDetails sup = resolveSupervisor(cluster, hostOrId, hostIdToVmName);
                 if (sup == null) {
                     LOG.warn("No supervisor found for '{}'. Those executors remain unscheduled.", hostOrId);
                     continue;
@@ -197,7 +200,14 @@ public class CsvOneToOneScheduler implements IScheduler {
         return out;
     }
 
-    private SupervisorDetails resolveSupervisor(Cluster cluster, String hostOrId) {
+    private SupervisorDetails resolveSupervisor(Cluster cluster, String hostOrId, Map<String, String> hostIdToVmName) {
+        // 0) Check if hostOrId is in the mapping (it's a node ID from placement CSV)
+        String vmName = hostIdToVmName.get(hostOrId);
+        if (vmName != null && !vmName.isBlank()) {
+            LOG.debug("Mapping '{}' (node ID) to VM name '{}'", hostOrId, vmName);
+            hostOrId = vmName;
+        }
+
         // 1) Exact match by Supervisor ID
         SupervisorDetails byId = cluster.getSupervisorById(hostOrId);
         if (byId != null) {
@@ -254,5 +264,69 @@ public class CsvOneToOneScheduler implements IScheduler {
                 cluster.getAvailableSlots(s).size());
         }
         LOG.info("=================================");
+    }
+
+    /**
+     * Load host ID to VM name mapping from a separate CSV file
+     * File should be named similarly to placement CSV (e.g., if placement is "placement.csv", mapping is "placement_mapping.csv")
+     * Format: host, vm
+     *         0, worker-server-1
+     *         1, worker-edge-1
+     */
+    private Map<String, String> loadHostMapping(String placementCsvFile) {
+        Map<String, String> mapping = new HashMap<>();
+
+        // Derive mapping file name from placement CSV file
+        String mappingFile;
+        if (placementCsvFile.endsWith(".csv")) {
+            mappingFile = placementCsvFile.substring(0, placementCsvFile.length() - 4) + "_mapping.csv";
+        } else {
+            mappingFile = placementCsvFile + "_mapping.csv";
+        }
+
+        try {
+            Path p = Path.of(mappingFile);
+            if (!Files.exists(p)) {
+                LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
+                return mapping;
+            }
+            if (!Files.isReadable(p)) {
+                LOG.warn("Host mapping file is not readable: {}", mappingFile);
+                return mapping;
+            }
+
+            try (FileReader fileReader = new FileReader(mappingFile);
+                 CSVReader reader = new CSVReader(fileReader)) {
+                String[] row;
+                boolean first = true;
+
+                while ((row = reader.readNext()) != null) {
+                    if (row.length < 2) continue;
+
+                    if (first) {
+                        // Skip header line if present (host, vm)
+                        first = false;
+                        if ("host".equalsIgnoreCase(row[0].trim())) {
+                            continue;
+                        }
+                    }
+
+                    String hostId = row[0] == null ? "" : row[0].trim();
+                    String vmName = row[1] == null ? "" : row[1].trim();
+
+                    if (hostId.isEmpty() || vmName.isEmpty()) continue;
+                    if (hostId.startsWith("#")) continue; // allow comments
+
+                    mapping.put(hostId, vmName);
+                    LOG.debug("Loaded mapping: host {} -> VM {}", hostId, vmName);
+                }
+            }
+
+            LOG.info("Loaded {} host-to-VM mappings from {}", mapping.size(), mappingFile);
+        } catch (Exception ex) {
+            LOG.debug("Could not load host mapping file {}: {}", mappingFile, ex.getMessage());
+        }
+
+        return mapping;
     }
 }
