@@ -33,7 +33,7 @@ public class CsvOneToOneScheduler implements IScheduler {
         }
         this.hasHeader = Boolean.parseBoolean(String.valueOf(conf.getOrDefault(
                 "csv.scheduler.hasHeader",
-                "false"
+                "true"
         )));
 
         LOG.info("CsvOneToOneScheduler prepared. csvFile={}, hasHeader={}", csvFile, hasHeader);
@@ -43,6 +43,9 @@ public class CsvOneToOneScheduler implements IScheduler {
     public void schedule(Topologies topologies, Cluster cluster) {
         // component -> host (or supervisorId)
         Map<String, String> placement = readPlacementCsv(csvFile, hasHeader);
+
+        // Log available supervisors for debugging
+        logAvailableSupervisors(cluster);
 
         for (TopologyDetails topology : topologies.getTopologies()) {
             if (!cluster.needsScheduling(topology)) {
@@ -176,7 +179,13 @@ public class CsvOneToOneScheduler implements IScheduler {
                     if (component.isEmpty() || hostOrId.isEmpty()) continue;
                     if (component.startsWith("#")) continue; // allow comments
 
-                    out.put(component, hostOrId);
+                    // If component is a numeric ID, convert to "component_X" format
+                    String componentKey = component;
+                    if (component.matches("\\d+")) {
+                        componentKey = "component_" + component;
+                    }
+
+                    out.put(componentKey, hostOrId);
                 }
             }
 
@@ -191,11 +200,17 @@ public class CsvOneToOneScheduler implements IScheduler {
     private SupervisorDetails resolveSupervisor(Cluster cluster, String hostOrId) {
         // 1) Exact match by Supervisor ID
         SupervisorDetails byId = cluster.getSupervisorById(hostOrId);
-        if (byId != null) return byId;
+        if (byId != null) {
+            LOG.debug("Resolved '{}' to supervisor by ID: {} (host={})", hostOrId, byId.getId(), byId.getHost());
+            return byId;
+        }
 
         // 2) Exact match by host name
         for (SupervisorDetails s : cluster.getSupervisors().values()) {
-            if (hostOrId.equals(s.getHost())) return s;
+            if (hostOrId.equals(s.getHost())) {
+                LOG.debug("Resolved '{}' to supervisor by exact hostname match: {} (id={})", hostOrId, s.getHost(), s.getId());
+                return s;
+            }
         }
 
         // 3) Soft match (vm1 vs vm1.domain, etc.)
@@ -206,11 +221,38 @@ public class CsvOneToOneScheduler implements IScheduler {
                 String keyLower = hostOrId.toLowerCase(Locale.ROOT);
                 // Match short host to FQDN or vice versa (e.g., "vm1" <-> "vm1.domain")
                 if (hLower.startsWith(keyLower + ".") || keyLower.startsWith(hLower + ".")) {
+                    LOG.info("Resolved '{}' to supervisor by fuzzy match: {} (id={})", hostOrId, s.getHost(), s.getId());
                     return s;
                 }
             }
         }
 
+        LOG.warn("Could not resolve '{}' to any supervisor. Available supervisors:", hostOrId);
+        for (SupervisorDetails s : cluster.getSupervisors().values()) {
+            LOG.warn("  - ID: {}, Host: {}", s.getId(), s.getHost());
+        }
+
         return null;
+    }
+
+    /**
+     * Log all available supervisors for debugging VM identification issues
+     */
+    private void logAvailableSupervisors(Cluster cluster) {
+        Map<String, SupervisorDetails> supervisors = cluster.getSupervisors();
+        if (supervisors.isEmpty()) {
+            LOG.warn("No supervisors registered with Nimbus!");
+            return;
+        }
+
+        LOG.info("=== Available Supervisors ({}) ===", supervisors.size());
+        for (SupervisorDetails s : supervisors.values()) {
+            LOG.info("  Supervisor ID: {}", s.getId());
+            LOG.info("    Hostname: {}", s.getHost());
+            LOG.info("    Total Slots: {}, Available: {}",
+                s.getAllPorts().size(),
+                cluster.getAvailableSlots(s).size());
+        }
+        LOG.info("=================================");
     }
 }

@@ -14,8 +14,6 @@ This project implements energy-aware scheduling for Apache Storm in fog/edge/clo
 ./scripts/launch-topology-from-csv.sh ../python_algo/properties/Appli_10comps_dcns.properties DCNS
 ```
 
-See [TOPOLOGY_FROM_CSV.md](TOPOLOGY_FROM_CSV.md) for complete documentation on the TopologyFromCSV feature.
-
 ### Submit Test Topology
 
 ```bash
