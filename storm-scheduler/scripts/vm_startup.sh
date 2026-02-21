@@ -31,8 +31,32 @@ fi
 echo "Installing prerequisites..."
 # Use DEBIAN_FRONTEND=noninteractive for GCP automated environment
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim zookeeperd
+
+# Fix any broken packages first
+echo "Fixing package manager state..."
+dpkg --configure -a 2>/dev/null || true
+apt-get install -f -y -qq 2>/dev/null || true
+
+# Update package list
+apt-get update -qq || {
+    echo "First apt-get update failed, trying again..."
+    apt-get update
+}
+
+# Install packages with proper error handling
+echo "Installing Java, Git, Maven, and other tools..."
+apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim || {
+    echo "Package installation encountered errors, attempting to fix..."
+    apt-get install -f -y
+    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim
+}
+
+# Install zookeeper separately (can fail on some systems)
+echo "Installing Zookeeper..."
+apt-get install -y -qq zookeeperd || {
+    echo "⚠ Warning: Zookeeper installation failed. Install manually if needed."
+    echo "  This is only required on master nodes."
+}
 
 # Verify Java installation
 java -version
@@ -81,8 +105,9 @@ else
     echo "  Storm will use default configuration"
 fi
 
-# setup .env file for storm user with STOM_HOME
+# Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
+chown storm:storm /home/storm/.env
 
 # Create placement CSV directory
 mkdir -p /etc/storm
