@@ -7,6 +7,7 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+
 # Load environment variables
 source "$SCRIPT_DIR/env.sh"
 
@@ -51,6 +52,9 @@ fi
 
 echo "     ✅ ZooKeeper is UP."
 
+# 2. Build Scheduler JAR (if needed)
+source "$SCRIPT_DIR/build_scheduler.sh"
+
 # 2. START NIMBUS
 echo "   > Starting Nimbus..."
 if nc -z localhost 6627; then
@@ -80,8 +84,11 @@ else
     echo "     ✅ Storm UI launched (PID: $!). Logs in $LOG_DIR/ui.log"
 fi
 
+# get public IP address for user reference
+PUBLIC_IP=$(curl -s ifconfig.me || echo "localhost")
+
 echo "-----------------------------------------------"
 echo " Master Node is Ready!"
-echo "   - Dashboard: http://localhost:8080"
+echo "   - Dashboard: http://$PUBLIC_IP:8080"
 echo "   - Now you can launch your Supervisors."
 echo "-----------------------------------------------"
