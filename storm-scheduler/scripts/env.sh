@@ -8,9 +8,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of scripts directory)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Load the .env file if it exists (from project root)
+# Load the .env file if it exists (from project root or home directory)
 if [ -f "$PROJECT_ROOT/.env" ]; then
     source "$PROJECT_ROOT/.env"
+elif [ -f "$HOME/.env" ]; then
+    source "$HOME/.env"
 else
     echo "❌ Error: .env file not found in $PROJECT_ROOT"
     echo "   Please create one containing: STORM_HOME='/path/to/storm'"

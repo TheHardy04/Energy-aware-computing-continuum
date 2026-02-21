@@ -81,6 +81,9 @@ else
     echo "  Storm will use default configuration"
 fi
 
+# setup .env file for storm user with STOM_HOME
+echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
+
 # Create placement CSV directory
 mkdir -p /etc/storm
 chmod 755 /etc/storm
