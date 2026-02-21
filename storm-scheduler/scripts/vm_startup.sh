@@ -76,6 +76,12 @@ mkdir -p /usr/local/storm/logs /usr/local/storm/data
 chown -R storm:storm /usr/local/storm
 chmod -R 755 /usr/local/storm
 
+# --- GRANT STORM USER SUDO ACCESS ---
+# Allow storm user to run sudo commands without password
+echo "storm ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/storm-nopasswd
+chmod 0440 /etc/sudoers.d/storm-nopasswd
+echo "✓ Storm user can now run sudo commands without password"
+
 # Add binaries to PATH
 ln -sf /usr/local/storm/bin/storm /usr/bin/storm
 
