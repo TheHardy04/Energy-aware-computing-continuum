@@ -1,27 +1,103 @@
 #!/bin/bash
+set -e  # Exit on error
 
-## This script is intended to be run on a VM startup to set up the environment for Apache Storm.
-## To run storm-scheduler on a VM, use the start_master.sh and start_worker.sh scripts
+## GCP VM Startup Script for Apache Storm
+## This script runs automatically on VM creation/startup
+## Logs are visible in: Compute Engine > VM instances > click VM > Logs > Serial port 1
+## Or via: gcloud compute instances get-serial-port-output INSTANCE_NAME
+
+# Log to both stdout and GCP serial console
+exec > >(tee -a /var/log/storm-startup.log)
+exec 2>&1
+
+echo "=========================================="
+echo "Storm Setup Started: $(date)"
+echo "=========================================="
+
+# Check if running as root (GCP startup scripts run as root by default)
+if [[ $EUID -ne 0 ]]; then
+   echo "Error: This script must be run as root" >&2
+   exit 1
+fi
+
+# Skip if already installed (for VM restarts)
+if [[ -f "/usr/local/storm/bin/storm" ]]; then
+    echo "Storm already installed, skipping setup"
+    echo "Setup completed at: $(date)"
+    exit 0
+fi
 
 # Update package list and install Java 17 and other necessary tools
-apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim
+echo "Installing prerequisites..."
+# Use DEBIAN_FRONTEND=noninteractive for GCP automated environment
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim zookeeperd
 
 # Verify Java installation
 java -version
 
-# --- 2. INSTALL ZOOKEEPER ---
-apt-get install -y zookeeperd
-
-# --- 3. DOWNLOAD & INSTALL APACHE STORM 2.8.3 ---
+# --- DOWNLOAD & INSTALL APACHE STORM 2.8.3 ---
+echo "Installing Apache Storm..."
 STORM_VER="2.8.3"
-wget https://downloads.apache.org/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
-tar -zxf apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to extract Apache Storm archive apache-storm-$STORM_VER.tar.gz." >&2; exit 1; }
+cd /tmp
+wget -q https://downloads.apache.org/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
+tar -zxf apache-storm-$STORM_VER.tar.gz
 mv apache-storm-$STORM_VER /usr/local/storm
 
-# --- 4. SET PERMISSIONS AND PATHS ---
-# Give the right to everyone to read write and execute the storm directory (for simplicity in this VM setup)
-mkdir -p /usr/local/storm/logs
-chmod -R 777 /usr/local/storm
+# --- SET PERMISSIONS (SECURE) ---
+# Create storm user and set proper permissions
+useradd -r -m -s /bin/bash storm 2>/dev/null || true
+mkdir -p /usr/local/storm/logs /usr/local/storm/data
+chown -R storm:storm /usr/local/storm
+chmod -R 755 /usr/local/storm
 
 # Add binaries to PATH
-ln -s /usr/local/storm/bin/storm /usr/bin/storm
+ln -sf /usr/local/storm/bin/storm /usr/bin/storm
+
+# Cleanup
+rm -f /tmp/apache-storm-$STORM_VER.tar.gz
+
+# Clone project to storm user's home first (needed for storm.yaml)
+echo "Cloning project repository..."
+if [ ! -d "/home/storm/Energy-aware-computing-continuum" ]; then
+    sudo -u storm git clone https://github.com/TheHardy04/Energy-aware-computing-continuum.git /home/storm/Energy-aware-computing-continuum
+    chown -R storm:storm /home/storm/Energy-aware-computing-continuum
+    echo "✓ Project cloned to /home/storm/Energy-aware-computing-continuum"
+else
+    echo "✓ Project already exists"
+fi
+
+# --- CONFIGURE STORM ---
+echo "Configuring Storm..."
+
+# Copy storm.yaml from repo
+if [ -f "/home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml" ]; then
+    cp /home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml /usr/local/storm/conf/storm.yaml
+    chown storm:storm /usr/local/storm/conf/storm.yaml
+    echo "✓ Storm configured (copied from repo)"
+else
+    echo "⚠ Warning: storm.yaml not found in repo at storm-scheduler/conf/storm.yaml"
+    echo "  Storm will use default configuration"
+fi
+
+# Create placement CSV directory
+mkdir -p /etc/storm
+chmod 755 /etc/storm
+
+echo "=========================================="
+echo "✓ Storm setup complete!"
+echo "  Version: $(storm version | head -1)"
+echo "  Hostname: $(hostname -s)"
+echo "  Time: $(date)"
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "  1. SSH to this VM"
+echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
+echo "  3. Master: ./scripts/start_master.sh"
+echo "     Worker: ./scripts/start_worker.sh"
+echo ""
+
+# Mark completion in GCP logs
+echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
