@@ -29,11 +29,11 @@ supervisor.slots.ports:
   - 6700
 
 # custom scheduler class
-storm.scheduler: "fr.dvrc.thardy.scheduler.DefaultSchedulerRework"
+storm.scheduler: "fr.dvrc.thardy.scheduler.CsvOneToOneScheduler"
 
 # Path to the CSV file for the custom scheduler.
-csv.scheduler.file: "/etc/storm/component-placement.csv"
-csv.scheduler.hasHeader: false
+csv.scheduler.file: "/etc/storm/placement.csv"
+csv.scheduler.hasHeader: true
 
 # Rate that the topology emit a stat
 topology.stats.sample.rate: 1
