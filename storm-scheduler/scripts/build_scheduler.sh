@@ -9,7 +9,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 ## Variables
-SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
+SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT-all.jar"
 
 # Load environment variables
 source "$SCRIPT_DIR/env.sh"
