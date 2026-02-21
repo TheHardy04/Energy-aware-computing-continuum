@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
 echo "🛑 Stopping all Storm processes..."
 
 # Function to kill processes matching a pattern
@@ -33,13 +41,13 @@ kill_storm_process() {
     fi
 }
 
-# Kill supervisors
-kill_storm_process "Storm Supervisor" "org.apache.storm.daemon.supervisor"
+# Kill supervisors - use more specific patterns
+kill_storm_process "Storm Supervisor" "org.apache.storm.daemon.supervisor.Supervisor"
 # Alternative pattern if the above doesn't match
 kill_storm_process "Storm Supervisor (alt)" "storm supervisor"
 
 # Kill nimbus if running
-kill_storm_process "Storm Nimbus" "org.apache.storm.daemon.nimbus"
+kill_storm_process "Storm Nimbus" "org.apache.storm.daemon.nimbus.Nimbus"
 kill_storm_process "Storm Nimbus (alt)" "storm nimbus"
 
 # Kill UI if running
