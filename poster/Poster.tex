@@ -19,6 +19,7 @@
 \usepackage{amsmath,amsfonts,amssymb,amsthm}
 \usepackage{eqparbox}
 \usepackage{textcomp}
+\usepackage{natbib}
 \usepackage{tikz} % <-- important pour \background avec tikzpicture
 \usetikzlibrary{arrows.meta,positioning}
 
@@ -30,12 +31,12 @@
 
 \definecolor{bordercol}{RGB}{80,80,80}        % Borders
 \definecolor{esilvcol}{RGB}{206,16,82}        % ESILV color #CE1052
-\definecolor{headercol1}{RGB}{206,16,82}      % Header left (ESILV)
-\definecolor{headercol2}{RGB}{206,16,82}      % Header right (ESILV)
+\definecolor{headercol1}{RGB}{230,100,150}    % Header left (ESILV) - lighter
+\definecolor{headercol2}{RGB}{230,100,150}    % Header right (ESILV) - lighter
 \definecolor{headerfontcol}{RGB}{255,255,255}% Header text (white)
 \definecolor{boxcolor}{RGB}{250,250,248}      % Content (off-white)
-\definecolor{taxonomycol}{RGB}{34,139,34}     % Taxonomy - Green
-\definecolor{benchmarkcol}{RGB}{204,85,0}     % Real-World Benchmarking - Orange
+\definecolor{taxonomycol}{RGB}{100,180,100}   % Taxonomy - Green - lighter
+\definecolor{benchmarkcol}{RGB}{240,140,60}   % Real-World Benchmarking - Orange - lighter
 
 % Page background color
 \definecolor{bgcol}{RGB}{252,252,250}         % Very light global background      
@@ -330,7 +331,7 @@ We adopt a linear power model based on CPU utilization:
 {\small
 \begin{tabular}{l|c|c|c}
 \toprule
-\textbf{Metric} & \textbf{Greedy (FFD)} & \textbf{CSP (OPTIMAL)} & \textbf{LLM (gemini-2.0)} \\
+\textbf{Metric} & \textbf{Greedy} & \textbf{CSP}\cite{ait2025optimisation} & \textbf{LLM (gemini-2.0)}\cite{ait2025optimisation} \\
 \midrule
 \textbf{$E_{total}$} (Wh) & 634785 & 265685 & 265685 \\
 \textbf{Link Energy} (Wh) & 633500 & 265000 & 265000 \\
@@ -369,11 +370,14 @@ We adopt a linear power model based on CPU utilization:
 }
 
 %----------------------------------------------------------------------------------------
-%	ACKNOWLEDGEMENTS
+%	REFERENCES
 %----------------------------------------------------------------------------------------
-\headerbox{Acknowledgements}{name=acknowledgements,column=3,below=results, ,span=3}{
+\headerbox{References}{name=references,column=3,below=results, span=3}{
+  \vspace{-0.5cm}
 \smaller
-We thank supervisors \textbf{Farah Ait Salaht} for microservice optimization insights, and \textbf{WLADDIMIRO Daniel} for enabling real-world GCP and Apache Storm deployment. Work conducted at ESILV.
+\renewcommand{\refname}{}
+\bibliographystyle{unsrt}
+\bibliography{biblio}
 }
 
 \end{poster}
