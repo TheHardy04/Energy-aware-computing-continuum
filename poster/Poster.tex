@@ -222,11 +222,13 @@ boxshade=plain
 
 \vspace{0.1cm}
 \begin{center}
-  \textbf{Simulation Setup: Infrastructure and DSP}
+  {\large \textbf{Simulation Setup: Infrastructure and DSP}}
 \includegraphics[width=\linewidth]{SimulationSetup.png}
 \end{center}
 
-\vspace{0.15cm}
+\begin{center}
+  {\large\textbf{VMs GCE used in the case study}}
+\end{center}
 \begin{minipage}[c]{0.18\linewidth}
 \centering
 \includegraphics[width=\linewidth]{gcp.png}
@@ -234,7 +236,6 @@ boxshade=plain
 \hfill
 \begin{minipage}[c]{0.80\linewidth}
 \begin{center}
-\textbf{VMs GCE used in the case study (heterogeneous types)}
 
 \vspace{0.2cm}
 \begin{tabular}{l c c c c}
@@ -267,7 +268,7 @@ scale=0.8,
 nimbus/.style={draw, rounded corners, fill=orange!20, minimum width=2.2cm, minimum height=0.7cm, thick},
 supervisor/.style={draw, rounded corners, fill=blue!15, minimum width=2cm, minimum height=0.6cm, thick},
 task/.style={draw, rounded corners, fill=green!20, minimum width=0.9cm, minimum height=0.4cm, font=\footnotesize},
-vm/.style={draw, dashed, rounded corners, minimum width=2cm, minimum height=1.7cm, thick, color=gray},
+vm/.style={draw, dashed, rounded corners, minimum width=2cm, minimum height=1.9cm, thick, color=gray},
 arrow/.style={-{Stealth[length=3pt]}, thick}
 ]
 
@@ -297,11 +298,12 @@ arrow/.style={-{Stealth[length=3pt]}, thick}
 \draw[arrow, opacity=0.5] (nimbus) -- (7.5, 0.6);
 
 \end{tikzpicture}
-\begin{center}
-\textbf{Storm Topology Deployment}
-\end{center}
+
 
 \end{minipage}
+\begin{center}
+\large\textbf{Storm Topology Deployment}
+\end{center}
 }
 }
 
@@ -315,7 +317,7 @@ arrow/.style={-{Stealth[length=3pt]}, thick}
 \textbf{Energy Modeling and Algorithm Comparison}
 \end{center}
 
-\vspace{0.08cm}
+\vspace{-0.2cm}
 {\footnotesize
 We adopt a linear power model based on CPU utilization:
 \begin{equation}\label{eq:power}
@@ -323,10 +325,9 @@ We adopt a linear power model based on CPU utilization:
 \end{equation}
 
 
-\vspace{0.08cm}
+\vspace{-0.5cm}
 \begin{center}
 \textbf{Placement Algorithm Comparison}
-\vspace{0.08cm}
 
 {\small
 \begin{tabular}{l|c|c|c}
@@ -353,7 +354,7 @@ We adopt a linear power model based on CPU utilization:
 %----------------------------------------------------------------------------------------
 %	CONCLUSION
 %----------------------------------------------------------------------------------------
-\headerbox{Conclusion \& Perspectives}{name=conclusion,column=0,below=taxonomy,span=3}{
+\headerbox{Conclusion \& Perspectives}{name=conclusion,column=0,below=taxonomy,above=bottom,span=3}{
 \textbf{Contributions:} Unified energy taxonomy and practical guidelines for task orchestration on GCP. \textbf{Mini-survey on energy aspects} across heterogeneous infrastructure. \textbf{Paper for COMPAS conference} documenting energy modeling and real-world benchmarking.
 
 \textbf{Future Work:}
@@ -372,7 +373,7 @@ We adopt a linear power model based on CPU utilization:
 %----------------------------------------------------------------------------------------
 %	REFERENCES
 %----------------------------------------------------------------------------------------
-\headerbox{References}{name=references,column=3,below=results, span=3}{
+\headerbox{References}{name=references,column=3,below=results, above=bottom, span=3}{
   \vspace{-0.5cm}
 \smaller
 \renewcommand{\refname}{}
