@@ -1957,10 +1957,10 @@ def print_comparison(results: List[SolverResult], bounds, infra, appli):
 # =====================================================================
 def main():
     pa = argparse.ArgumentParser(description="TPDS2 Benchmark Unifie: CSP / LLM / Glouton (FFD)")
-    pa.add_argument("--infra", default="properties/Infra_8nodes.properties")
-    pa.add_argument("--appli", default="properties/Appli_4comps.properties")
-    #pa.add_argument("--infra", default="properties/Infra_16nodes_fog3tier.properties")
-    #pa.add_argument("--appli", default="properties/Appli_8comps_smartbuilding.properties")
+    # pa.add_argument("--infra", default="properties/Infra_8nodes.properties")
+    # pa.add_argument("--appli", default="properties/Appli_4comps.properties")
+    pa.add_argument("--infra", default="properties/Infra_16nodes_fog3tier.properties")
+    pa.add_argument("--appli", default="properties/Appli_8comps_smartbuilding.properties")
     #pa.add_argument("--infra", default="properties/Infra_24nodes_dcns.properties")
     #pa.add_argument("--appli", default="properties/Appli_10comps_dcns.properties")
     #pa.add_argument("--infra", default="properties/Infra_28nodes_smartcity.properties")

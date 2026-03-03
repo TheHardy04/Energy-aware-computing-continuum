@@ -131,7 +131,7 @@ class NetworkGraph:
 
 		# Compute node colors: map to 3 colors depending on CPU value
 		palette = ['#8fce00', '#ffd966', '#e06666']  # green, yellow, red
-		t1, t2 =  (8, 16)
+		t1, t2 =  (7, 16)
 		node_colors = []
 		for _, data in self.G.nodes(data=True):
 			val = data.get('cpu', 0)
