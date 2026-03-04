@@ -10,6 +10,7 @@ from src.serviceGraph import ServiceGraph
 from src.greedyFirstIteratePlacement import GreedyFirstIterate
 from src.greedyFirstFitPlacement import GreedyFirstFit
 from src.cspPlacement import CSP
+from src.llmPlacement import LLMPlacement
 from src.resultExporter import ResultExporter
 from src.evaluation import Evaluator
 from mappingUnitTest import MappingUnitTest
@@ -31,7 +32,7 @@ if __name__ == '__main__':
     ' (default: properties/Infra_8nodes.properties)')
     parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
     ' (default: properties/Appli_4comps.properties)')
-    parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
+    parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'LLM', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
     parser.add_argument('--to-csv', type=str, default='results/placement.csv', help='Optional path to export results as CSV')
     args = parser.parse_args()
 
@@ -93,6 +94,8 @@ if __name__ == '__main__':
     logger.info("Running placement with %s strategy...", args.strategy)  
     if args.strategy == 'CSP':
         strategy = CSP()
+    if args.strategy == 'LLM':
+        strategy = LLMPlacement()
     elif args.strategy == 'GreedyFirstFit':
         strategy = GreedyFirstFit()
     elif args.strategy == 'GreedyFirstIterate':
