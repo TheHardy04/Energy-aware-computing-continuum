@@ -1,7 +1,4 @@
-"""
-LLM-based Placement using OPRO (Optimization by PROmpting)
-Adapted from Code_unified_benchmark_vf.py
-"""
+
 
 import os
 import re
@@ -697,8 +694,9 @@ def _build_opro_prompt(problem_desc: str, trajectory: List, feedback: str,
 # LLM PLACEMENT CLASS
 # =====================================================================
 class LLMPlacement(PlacementAlgo):
-    """LLM-based placement using OPRO (Optimization by PROmpting)"""
-    
+    """LLM-based placement using OPRO (Optimization by PROmpting)
+    Adapeted from the work of Google DeepMind's paper: [LARGE LANGUAGE MODELS AS OPTIMIZERS](https://arxiv.org/pdf/2309.03409) and Farah AIT SALAHT
+    """
     def __init__(self, provider: str = "auto", model: str = "auto", 
                  max_iter: int = 5, verbose: bool = True):
         """
@@ -966,7 +964,7 @@ class LLMPlacement(PlacementAlgo):
                         return "ollama", m
             return "ollama", models[0]
         
-        raise ValueError("No LLM provider detected. Set API keys or install Ollama.")
+        raise ValueError("No LLM provider detected. Set API keys in environment variables or install Ollama.")
     
     def _ollama_list_models(self) -> List[str]:
         """List available Ollama models"""
