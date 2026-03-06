@@ -963,8 +963,15 @@ class LLMPlacement(PlacementAlgo):
                     if pref in m:
                         return "ollama", m
             return "ollama", models[0]
-        
-        raise ValueError("No LLM provider detected. Set API keys in environment variables or install Ollama.")
+
+        raise ValueError(
+            "No LLM provider detected. Set API keys in environment variables using:\n"
+            "- For Gemini: GEMINI_API_KEY or GOOGLE_API_KEY\n"
+            "- For Anthropic: ANTHROPIC_API_KEY\n"
+            "- For OpenAI: OPENAI_API_KEY\n"
+            "or install Ollama.\n"
+            "On Windows, use 'set VAR=value' and on Linux/Mac use 'export VAR=value' in the terminal."
+        )
     
     def _ollama_list_models(self) -> List[str]:
         """List available Ollama models"""
