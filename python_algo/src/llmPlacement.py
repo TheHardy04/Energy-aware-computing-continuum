@@ -157,6 +157,7 @@ CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact):
 4. INTER-ZONE ACCEPTABLE: <=25ms links (factor=1.5) are second-best.
 5. FEWER ACTIVE HOSTS REDUCES NODE POWER, but avoid costly cross-region communication.
 6. DZ CONSTRAINTS ARE ABSOLUTE and CAPACITY IS A HARD WALL.
+7. DO NOT DEFAULT TO H0: avoid trivial "everything on node 0" when it causes link latency violations.
 
 KEY INSIGHT: Minimize cross-region and long-latency traffic first, then consolidate where possible.
 
@@ -462,7 +463,7 @@ def _evaluate_solution(placement: Dict[int, int],
             # Enforce latency constraint explicitly
             if path_lat > lat_ub:
                 sol.violations.append(
-                    f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
+                    f"Latency violation on link C{u}->C{v}: {path_lat} > {lat_ub}"
                 )
                 sol.feasible = False
 
@@ -490,7 +491,7 @@ def _evaluate_solution(placement: Dict[int, int],
                 sol.paths[len(sol.paths)] = path
                 sol.consumed_lat[len(sol.consumed_lat)] = path_lat
             except nx.NetworkXNoPath:
-                sol.violations.append(f"No path between H{hs} and H{ht} for link C{u}→C{v}")
+                sol.violations.append(f"No path between H{hs} and H{ht} for link C{u}->C{v}")
                 sol.feasible = False
                 link_lats.append(INF_V)
     
@@ -499,7 +500,7 @@ def _evaluate_solution(placement: Dict[int, int],
         if NG.has_edge(u, v):
             bw_cap = NG.edges[u, v].get('bandwidth', 0)
             if bw_cap > 0 and flow > bw_cap:
-                sol.violations.append(f"Link H{u}→H{v} bandwidth overflow: {flow} > {bw_cap}")
+                sol.violations.append(f"Link H{u}->H{v} bandwidth overflow: {flow} > {bw_cap}")
                 sol.feasible = False
     
     # Metrics
@@ -548,9 +549,13 @@ def _evaluate_solution(placement: Dict[int, int],
 # =====================================================================
 def _greedy_placement(network_graph: NetworkGraph, 
                       service_graph: ServiceGraph) -> Dict[int, int]:
-    """Simple greedy First-Fit Decreasing placement"""
+    """Latency-aware greedy placement used as robust fallback for LLM."""
     NG = network_graph.G
     SG = service_graph.G
+    cfg = _load_energy_settings()
+
+    # Precompute shortest-path latencies once to avoid repeated graph traversals.
+    sp_len = dict(nx.all_pairs_dijkstra_path_length(NG, weight='latency'))
     
     pl = {}
     cu = {h: 0 for h in NG.nodes()}
@@ -558,33 +563,78 @@ def _greedy_placement(network_graph: NetworkGraph,
     
     # Handle DZ
     dz_data = service_graph.metadata.get('component.DZ', [])
+    dz_hosts = set()
     if dz_data and len(dz_data) >= 2:
         for i in range(0, len(dz_data), 2):
             if i+1 >= len(dz_data):
                 break
             ci, hi = dz_data[i], dz_data[i+1]
             pl[ci] = hi
+            dz_hosts.add(hi)
             cpu_req = SG.nodes[ci].get('cpu', 0)
             ram_req = SG.nodes[ci].get('ram', 0)
             cu[hi] += cpu_req
             ru[hi] += ram_req
-    
-    # Place remaining components
-    for c in SG.nodes():
+
+    # Place remaining components in decreasing CPU order.
+    comp_order = sorted(
+        [c for c in SG.nodes() if c not in pl],
+        key=lambda c: (SG.nodes[c].get('cpu', 0), SG.degree(c)),
+        reverse=True,
+    )
+
+    for c in comp_order:
         if c in pl:
             continue
         
         cpu_req = SG.nodes[c].get('cpu', 0)
         ram_req = SG.nodes[c].get('ram', 0)
         
-        # Find first fit
         best_h = None
+        best_score = float("inf")
+
         for h in NG.nodes():
             cpu_cap = NG.nodes[h].get('cpu', 0)
             ram_cap = NG.nodes[h].get('ram', 0)
             if cu[h] + cpu_req <= cpu_cap and ru[h] + ram_req <= ram_cap:
-                best_h = h
-                break
+                # Node power after placing c on h
+                projected_cpu = cu[h] + cpu_req
+                node_cost = _node_power_w(projected_cpu, int(cpu_cap or 0), cfg)
+
+                # Communication cost to already placed neighbors (bw * lat * factor)
+                comm_cost = 0.0
+                for _, nb, data in SG.out_edges(c, data=True):
+                    if nb in pl:
+                        nb_h = pl[nb]
+                        lat = sp_len.get(h, {}).get(nb_h, INF_V)
+                        if lat >= INF_V:
+                            comm_cost += 1e9
+                        else:
+                            bw = data.get('bandwidth', 0)
+                            comm_cost += bw * lat * _link_factor(float(lat), cfg)
+                for nb, _, data in SG.in_edges(c, data=True):
+                    if nb in pl:
+                        nb_h = pl[nb]
+                        lat = sp_len.get(nb_h, {}).get(h, INF_V)
+                        if lat >= INF_V:
+                            comm_cost += 1e9
+                        else:
+                            bw = data.get('bandwidth', 0)
+                            comm_cost += bw * lat * _link_factor(float(lat), cfg)
+
+                # Slight preference to stay near DZ anchors to avoid pathological H0 consolidation.
+                dz_cost = 0.0
+                if dz_hosts:
+                    vals = [sp_len.get(h, {}).get(dh, INF_V) for dh in dz_hosts]
+                    if any(v >= INF_V for v in vals):
+                        dz_cost = 1e6
+                    else:
+                        dz_cost = sum(vals) / max(1, len(vals))
+
+                score = comm_cost + 0.2 * node_cost + 5.0 * dz_cost
+                if score < best_score:
+                    best_score = score
+                    best_h = h
         
         if best_h is not None:
             pl[c] = best_h
@@ -627,7 +677,8 @@ def _generate_seed_placements(network_graph: NetworkGraph,
     # Seed 1: Greedy FFD
     seeds.append(("FFD greedy baseline", _greedy_placement(network_graph, service_graph)))
     
-    # Seed 2: Consolidate on single best host
+    # Seed 2: Consolidate on selected hosts (do not stop at first feasible host)
+    consolidate_candidates = []
     for target_h in NG.nodes():
         pl = dict(dz)
         cu = {h: 0 for h in NG.nodes()}
@@ -651,8 +702,12 @@ def _generate_seed_placements(network_graph: NetworkGraph,
             for c in free:
                 pl[c] = target_h
             if len(pl) == len(SG.nodes()):
-                seeds.append((f"Consolidate on H{target_h}", pl))
-                break
+                sol = _evaluate_solution(pl, network_graph, service_graph, bounds, *w)
+                consolidate_candidates.append((sol.objective_int if sol.feasible else 10**9, target_h, pl))
+
+    consolidate_candidates.sort(key=lambda x: x[0])
+    for _, target_h, pl in consolidate_candidates[:3]:
+        seeds.append((f"Consolidate on H{target_h}", pl))
     
     # Seed 3: DZ-spread (place near DZ hosts)
     if dz:
