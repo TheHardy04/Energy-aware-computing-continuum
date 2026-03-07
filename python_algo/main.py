@@ -10,6 +10,7 @@ from src.serviceGraph import ServiceGraph
 from src.greedyFirstIteratePlacement import GreedyFirstIterate
 from src.greedyFirstFitPlacement import GreedyFirstFit
 from src.cspPlacement import CSP
+from src.llmPlacement import LLMPlacement
 from src.resultExporter import ResultExporter
 from src.evaluation import Evaluator
 from mappingUnitTest import MappingUnitTest
@@ -21,17 +22,17 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
     logger = logging.getLogger(__name__)
 
-    infra_properties_path = r'properties/Infra_8nodes.properties'
-    app_properties_path = r'properties/Appli_4comps.properties'
+    infra_properties_path = r'properties/Infra_16nodes_fog3tier.properties'
+    app_properties_path = r'properties/Appli_10comps_dcns.properties'
 
     parser = argparse.ArgumentParser(description='Demo placement runner')
     parser.add_argument('--plot', action='store_true', help='Whether to plot the graphs')
     parser.add_argument('--verbose', action='store_true', help='Whether to print detailed graph info and results')
     parser.add_argument('--infra', type=str, default=infra_properties_path, help='Path to infrastructure properties file' \
-    ' (default: properties/Infra_8nodes.properties)')
+    ' (default: properties/Infra_16nodes_fog3tier.properties)')
     parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
-    ' (default: properties/Appli_4comps.properties)')
-    parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
+    ' (default: properties/Appli_10comps_dcns.properties)')
+    parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'LLM', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
     parser.add_argument('--to-csv', type=str, default='results/placement.csv', help='Optional path to export results as CSV')
     args = parser.parse_args()
 
@@ -93,6 +94,8 @@ if __name__ == '__main__':
     logger.info("Running placement with %s strategy...", args.strategy)  
     if args.strategy == 'CSP':
         strategy = CSP()
+    elif args.strategy == 'LLM':
+        strategy = LLMPlacement()
     elif args.strategy == 'GreedyFirstFit':
         strategy = GreedyFirstFit()
     elif args.strategy == 'GreedyFirstIterate':

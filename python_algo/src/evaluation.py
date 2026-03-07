@@ -192,4 +192,4 @@ class Evaluator:
             for v in metrics.violations:
                 print(f"    - {v}")
         else:
-            print("  No violations detected.")
+            print("  No metrics violations detected.")

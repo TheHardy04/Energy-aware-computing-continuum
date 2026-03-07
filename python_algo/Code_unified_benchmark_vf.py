@@ -1766,7 +1766,7 @@ def _auto_detect_provider():
     # 1. Gemini
     gemini_key = os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
     if gemini_key:
-        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        model = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
         return "gemini", model
     # 2. Anthropic
     if os.environ.get("ANTHROPIC_API_KEY", ""):
@@ -1788,7 +1788,7 @@ def select_llm_provider():
     providers = {
         "1": ("anthropic", "claude-sonnet-4-20250514"),
         "2": ("openai", "gpt-4o"),
-        "3": ("gemini", "gemini-2.0-flash"),
+        "3": ("gemini", "gemini-3.1-flash-lite-preview"),
         "4": ("ollama", "llama3"),
         "5": ("auto", "auto"),
     }
@@ -2031,7 +2031,7 @@ def main():
                 provider = None
         elif args.provider:
             defaults = {"anthropic": "claude-sonnet-4-20250514", "openai": "gpt-4o",
-                        "gemini": "gemini-2.0-flash", "ollama": "llama3"}
+                        "gemini": "gemini-3.1-flash-lite-preview", "ollama": "llama3"}
             provider = args.provider; model = defaults.get(provider, "gpt-4o")
         else:
             provider, model = select_llm_provider()
