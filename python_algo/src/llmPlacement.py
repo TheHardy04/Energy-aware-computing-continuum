@@ -8,6 +8,7 @@ import urllib.error
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from functools import lru_cache
 
 import networkx as nx
 
@@ -18,11 +19,96 @@ from src.serviceGraph import ServiceGraph
 # =====================================================================
 # CONSTANTS
 # =====================================================================
-P_STATIC = 200
-P_CPU_UNIT = 5
 NORM = 10000
 INF_V = 10 ** 9
 P_CPU_LOCAL = float(os.environ.get("P_CPU_WATTS", "45"))  # Watts
+
+# GCP energy model defaults (aligned with Code_unified_benchmark_energy_gcp.py)
+GCP_PUE = 1.10
+GCP_P_VCPU_IDLE_W = 1.0
+GCP_P_VCPU_ACTIVE_W = 8.0
+
+GCP_LAT_INTRAZONE_MS = 2.0
+GCP_LAT_INTERZONE_MS = 25.0
+
+GCP_FACTOR_INTRAZONE = 1.0
+GCP_FACTOR_INTERZONE = 1.5
+GCP_FACTOR_CROSSREGION = 2.0
+
+
+def _parse_simple_properties(file_path: str) -> Dict[str, str]:
+    """Minimal .properties parser (key=value), compatible with project files."""
+    props: Dict[str, str] = {}
+    with open(file_path, "r", encoding="utf-8") as f:
+        continuation = ""
+        for raw in f:
+            line = raw.rstrip("\n")
+            if line.endswith("\\"):
+                continuation += line[:-1]
+                continue
+            line = (continuation + line).strip()
+            continuation = ""
+            if not line or line[0] in "#!":
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+            elif ":" in line:
+                k, v = line.split(":", 1)
+            else:
+                continue
+            props[k.strip()] = v.strip()
+    return props
+
+
+@lru_cache(maxsize=1)
+def _load_energy_settings() -> Dict[str, float]:
+    """Load GCP energy constants from Energy_GCP.properties with safe defaults."""
+    default_path = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")
+    )
+    config_path = os.environ.get("CSP_ENERGY_PROPERTIES", "") or default_path
+
+    settings = {
+        "gcp.pue": GCP_PUE,
+        "gcp.p_vcpu_idle_w": GCP_P_VCPU_IDLE_W,
+        "gcp.p_vcpu_active_w": GCP_P_VCPU_ACTIVE_W,
+        "gcp.lat.intrazone_ms": GCP_LAT_INTRAZONE_MS,
+        "gcp.lat.interzone_ms": GCP_LAT_INTERZONE_MS,
+        "gcp.factor.intrazone": GCP_FACTOR_INTRAZONE,
+        "gcp.factor.interzone": GCP_FACTOR_INTERZONE,
+        "gcp.factor.crossregion": GCP_FACTOR_CROSSREGION,
+    }
+
+    if os.path.exists(config_path):
+        try:
+            raw = _parse_simple_properties(config_path)
+            for key in list(settings.keys()):
+                if key in raw:
+                    settings[key] = float(raw[key])
+        except Exception:
+            pass
+
+    return settings
+
+
+def _link_factor(latency_ms: float, cfg: Dict[str, float]) -> float:
+    """Infer GCP link factor from measured latency tier."""
+    if latency_ms <= cfg["gcp.lat.intrazone_ms"]:
+        return cfg["gcp.factor.intrazone"]
+    if latency_ms <= cfg["gcp.lat.interzone_ms"]:
+        return cfg["gcp.factor.interzone"]
+    return cfg["gcp.factor.crossregion"]
+
+
+def _node_power_w(cpu_used: int, cpu_cap: int, cfg: Dict[str, float]) -> float:
+    """GCP vCPU-slot node model with explicit zero for inactive hosts."""
+    if cpu_cap <= 0 or cpu_used <= 0:
+        return 0.0
+    used = min(cpu_used, cpu_cap)
+    return cfg["gcp.pue"] * (
+        cfg["gcp.p_vcpu_idle_w"] * cpu_cap
+        + (cfg["gcp.p_vcpu_active_w"] - cfg["gcp.p_vcpu_idle_w"]) * used
+    )
 
 # Energy per 1k tokens (Wh) - source: Luccioni et al. 2023
 ENERGY_PER_1K_TOKENS = {
@@ -43,7 +129,7 @@ COST_PER_1K_TOKENS = {
 # =====================================================================
 # LLM SYSTEM PROMPT
 # =====================================================================
-LLM_SYSTEM = """You are an expert optimizer for the Service Placement Problem (SPP) in Fog Computing.
+LLM_SYSTEM = """You are an expert optimizer for the Service Placement Problem (SPP) on Google Cloud Platform (GCP).
 Your goal is to find a placement that MINIMIZES the objective value. Lower is better.
 
 OBJECTIVE FUNCTION:
@@ -55,29 +141,28 @@ WHERE:
 - Lat_e2e = SUM of shortest-path latencies for ALL application links (end-to-end pipeline)
 - Cost = SUM of hostCost[h] for each ACTIVE host (host with >= 1 component placed on it)
 - Energy = E_links + E_nodes
-  - E_links = SUM over links l: bandwidth[l] * SUM(arc_latency^2 on path of link l)
-  - E_nodes = SUM over active hosts h: (200 + cpu_used[h] * 5)
+    - E_links = SUM over links l: bandwidth[l] * SUM(arc_latency * factor(link_type) on path of link l)
+        where factor(link_type) is inferred from latency:
+            intra-zone (<=2ms): 1.0
+            inter-zone (<=25ms): 1.5
+            cross-region (>25ms): 2.0
+    - E_nodes = SUM over active hosts h:
+            GCP_PUE * [P_vcpu_idle * cpu_cap[h] + (P_vcpu_active - P_vcpu_idle) * cpu_used[h]]
+        with GCP_PUE=1.10, P_vcpu_idle=1.0W/vCPU, P_vcpu_active=8.0W/vCPU
 
 CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact):
-1. COLOCATION ELIMINATES COST: Components on the SAME host have 0ms latency AND 0 link energy.
-2. BUT E_LINKS CAN DOMINATE: E_links = bw * lat^2 grows QUADRATICALLY with distance.
-   When total bandwidth is high, spreading across NEARBY hosts (low lat) beats consolidation
-   on a DISTANT host. Compare: 5 hosts all at 2ms = E_links~160 vs 1 host at 40ms = E_links~1.6M.
-3. FEWER HOSTS ≠ ALWAYS BETTER: Each host costs only P_static=200 node energy.
-   Adding 1 nearby host (+200 energy) is worth it if it saves thousands in link energy.
-4. DISTANCE IS SQUARED: Link energy grows with latency^2, so use the NEAREST available hosts.
-5. DZ CONSTRAINTS ARE ABSOLUTE: Fixed components MUST stay on their assigned host.
-6. CAPACITY IS A HARD WALL: CPU sum <= cpuCap[h] AND RAM sum <= ramCap[h] per host.
+1. COLOCATION ELIMINATES LINK COST: Components on the SAME host have 0ms latency and 0 link energy.
+2. CROSS-REGION LINKS ARE EXPENSIVE: factor=2.0 with high latency dominates energy.
+3. SAME-ZONE PREFERRED: <=2ms links are cheapest (factor=1.0).
+4. INTER-ZONE ACCEPTABLE: <=25ms links (factor=1.5) are second-best.
+5. FEWER ACTIVE HOSTS REDUCES NODE POWER, but avoid costly cross-region communication.
+6. DZ CONSTRAINTS ARE ABSOLUTE and CAPACITY IS A HARD WALL.
 
-KEY INSIGHT: The optimal placement often uses MORE hosts than you'd expect,
-as long as those hosts are CLOSE to each other and to DZ hosts.
-A 5-host solution with all hosts within 2ms of each other beats a 2-host solution
-with hosts 40ms apart.
+KEY INSIGHT: Minimize cross-region and long-latency traffic first, then consolidate where possible.
 
 OPTIMIZATION TRAJECTORY:
 Below you will see PREVIOUS placement attempts with their objective scores, sorted from worst to best.
-Study the patterns: solutions with LOWER scores use FEWER hosts, COLOCATE more components,
-and place free components CLOSE to DZ-constrained hosts.
+Study the patterns: solutions with LOWER scores reduce cross-region links and keep traffic local.
 Generate a NEW placement that achieves a LOWER objective than ALL previous attempts.
 
 REASONING PROTOCOL:
@@ -259,19 +344,19 @@ def _parse_llm_json(response: str, nbC: int) -> Optional[Dict[int, int]]:
 def _compute_norm_bounds(network_graph: NetworkGraph, service_graph: ServiceGraph) -> NormBounds:
     """Compute normalization bounds for objective function"""
     bounds = NormBounds()
+    cfg = _load_energy_settings()
     
     NG = network_graph.G
     SG = service_graph.G
     
-    # Get diameter
-    diameter = network_graph.metadata.get('network.diameter', len(NG.nodes()))
-    
-    # Max arc latency
-    max_arc_lat = max((d.get('latency', 1) for _, _, d in NG.edges(data=True)), default=1)
-    
-    # Latency upper bound
+    # Latency upper bound (sum of per-link SP latency worst case)
+    lengths = dict(nx.all_pairs_dijkstra_path_length(NG, weight='latency'))
+    lat_diameter = max(
+        (lengths[u][v] for u in lengths for v in lengths[u]),
+        default=float(network_graph.metadata.get('network.diameter', len(NG.nodes())))
+    )
     nbL = SG.number_of_edges()
-    bounds.lat_ub = max(1, nbL * diameter * max_arc_lat)
+    bounds.lat_ub = max(1, nbL * lat_diameter)
     
     # Cost upper bound (assuming all hosts may have a cost attribute, default to CPU)
     total_cost = sum(
@@ -280,13 +365,17 @@ def _compute_norm_bounds(network_graph: NetworkGraph, service_graph: ServiceGrap
     )
     bounds.cost_max = max(1, total_cost)
     
-    # Energy bounds
+    # Energy bounds (GCP model)
     max_flow = sum(d.get('bandwidth', 0) for _, _, d in SG.edges(data=True))  
-    max_flow = max(1, max_flow)    
-    bounds.e_link_ub = max(1, max_flow * max_arc_lat * max_arc_lat)
+    max_flow = max(1, max_flow)
+    bounds.e_link_ub = max(1, max_flow * lat_diameter * cfg["gcp.factor.crossregion"])
 
-    max_cpu = max((NG.nodes[h].get('cpu', 0) for h in NG.nodes()), default=1)
-    bounds.e_node_ub = len(NG.nodes()) * (P_STATIC + max_cpu * P_CPU_UNIT)
+    max_p_eff = max(
+        (cfg["gcp.pue"] * cfg["gcp.p_vcpu_active_w"] * (NG.nodes[h].get('cpu', 0) or 0)
+         for h in NG.nodes()),
+        default=1.0
+    )
+    bounds.e_node_ub = max(1, int(len(NG.nodes()) * max_p_eff))
     bounds.energy_ub = bounds.e_link_ub + bounds.e_node_ub
     
     return bounds
@@ -304,6 +393,7 @@ def _evaluate_solution(placement: Dict[int, int],
     
     NG = network_graph.G
     SG = service_graph.G
+    cfg = _load_energy_settings()
     nbC = SG.number_of_nodes()
     nbH = NG.number_of_nodes()
     
@@ -422,12 +512,15 @@ def _evaluate_solution(placement: Dict[int, int],
         for h in sol.active_hosts
     )
     
-    # Energy
+    # Energy (GCP model)
     sol.energy_link = sum(
-        fl * NG.edges[u, v].get('latency', 0) ** 2
+        fl * NG.edges[u, v].get('latency', 0) * _link_factor(float(NG.edges[u, v].get('latency', 0)), cfg)
         for (u, v), fl in arc_flow.items()
     )
-    sol.energy_node = sum(P_STATIC + cu[h] * P_CPU_UNIT for h in sol.active_hosts)
+    sol.energy_node = sum(
+        _node_power_w(cu[h], int(NG.nodes[h].get('cpu', 0) or 0), cfg)
+        for h in sol.active_hosts
+    )
     sol.energy_total = sol.energy_link + sol.energy_node
     
     # Objective
@@ -651,7 +744,7 @@ def _build_problem_description(network_graph: NetworkGraph,
         cpu = NG.nodes[h].get('cpu', 0)
         ram = NG.nodes[h].get('ram', 0)
         cost = NG.nodes[h].get('cost', cpu)
-        tier = "Cloud" if cpu >= 32 else ("Fog" if cpu >= 8 else "Edge")
+        tier = "gcp-large" if cpu >= 32 else ("gcp-medium" if cpu >= 8 else "gcp-small")
         lines.append(f"  H{h}: CPU={cpu:>3}, RAM={ram:>6}, Cost={cost:>3}, Tier={tier}")
     
     # Application
@@ -682,6 +775,11 @@ def _build_problem_description(network_graph: NetworkGraph,
     lines.append(f"\n=== OBJECTIVE WEIGHTS ===")
     lines.append(f"w_lat={w[0]}, w_cost={w[1]}, w_energy={w[2]}")
     lines.append(f"Bounds: lat_ub={bounds.lat_ub:.0f}, cost_max={bounds.cost_max:.0f}, energy_ub={bounds.energy_ub:.0f}")
+    cfg = _load_energy_settings()
+    lines.append(
+        f"Energy model: E_links=bw*lat*factor, factor(intra/inter/cross)="
+        f"{cfg['gcp.factor.intrazone']}/{cfg['gcp.factor.interzone']}/{cfg['gcp.factor.crossregion']}"
+    )
     
     return "\n".join(lines)
 
@@ -848,7 +946,7 @@ class LLMPlacement(PlacementAlgo):
             "NEARBY SPREAD: Place components on NEAREST hosts to DZ hosts.",
             "FIX BOTTLENECK: Colocate endpoints of the worst link.",
             "DZ-CENTRIC: Place near highest-bandwidth DZ hosts.",
-            "ENERGY MINIMIZER: Focus on minimizing E_links (quadratic in distance).",
+            "ENERGY MINIMIZER: Reduce cross-region links first, then inter-zone, then consolidate.",
             "COST REDUCER: Use cheaper hosts while maintaining performance.",
             "CREATIVE: Try a VERY DIFFERENT placement pattern.",
             "MICRO-OPTIMIZE: Test every single-component move systematically.",

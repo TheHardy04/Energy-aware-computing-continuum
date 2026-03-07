@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, List, Any
+import os
 
 import networkx as nx
 from ortools.sat.python import cp_model
@@ -9,9 +10,93 @@ from src.serviceGraph import ServiceGraph
 from src.utils import edge_ressources_snapshot, edge_capacity_ok, allocate_on_edges
 
 
-P_STATIC = 200  # Static energy cost for activating a host
-P_CPU_UNIT = 5  # Energy coefficient per CPU unit used
-P_LINK_UNIT = 1  # Energy coefficient for bandwidth * latency^2
+# GCP energy model defaults 
+GCP_PUE = 1.10
+GCP_P_VCPU_IDLE_W = 1.0
+GCP_P_VCPU_ACTIVE_W = 8.0
+
+GCP_LAT_INTRAZONE_MS = 2.0
+GCP_LAT_INTERZONE_MS = 25.0
+
+GCP_FACTOR_INTRAZONE = 1.0
+GCP_FACTOR_INTERZONE = 1.5
+GCP_FACTOR_CROSSREGION = 2.0
+
+# CP-SAT works on integers; energies are tracked in deci-Watts and converted back to Watts in meta.
+ENERGY_SCALE = 10
+
+
+def _parse_simple_properties(file_path: str) -> Dict[str, str]:
+    """Minimal .properties parser (key=value), compatible with project files."""
+    props: Dict[str, str] = {}
+    with open(file_path, "r", encoding="utf-8") as f:
+        continuation = ""
+        for raw in f:
+            line = raw.rstrip("\n")
+            if line.endswith("\\"):
+                continuation += line[:-1]
+                continue
+            line = (continuation + line).strip()
+            continuation = ""
+            if not line or line[0] in "#!":
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+            elif ":" in line:
+                k, v = line.split(":", 1)
+            else:
+                continue
+            props[k.strip()] = v.strip()
+    return props
+
+
+def _load_energy_settings(override_path: str = "") -> Dict[str, float]:
+    """Load GCP energy constants from a .properties file, with safe defaults."""
+    default_path = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")
+    )
+    config_path = (
+        override_path
+        or os.environ.get("CSP_ENERGY_PROPERTIES", "")
+        or default_path
+    )
+
+    settings = {
+        "gcp.pue": GCP_PUE,
+        "gcp.p_vcpu_idle_w": GCP_P_VCPU_IDLE_W,
+        "gcp.p_vcpu_active_w": GCP_P_VCPU_ACTIVE_W,
+        "gcp.lat.intrazone_ms": GCP_LAT_INTRAZONE_MS,
+        "gcp.lat.interzone_ms": GCP_LAT_INTERZONE_MS,
+        "gcp.factor.intrazone": GCP_FACTOR_INTRAZONE,
+        "gcp.factor.interzone": GCP_FACTOR_INTERZONE,
+        "gcp.factor.crossregion": GCP_FACTOR_CROSSREGION,
+        "gcp.energy_scale": float(ENERGY_SCALE),
+    }
+
+    if os.path.exists(config_path):
+        try:
+            raw = _parse_simple_properties(config_path)
+            for key in list(settings.keys()):
+                if key in raw:
+                    settings[key] = float(raw[key])
+        except Exception:
+            # Keep defaults if the settings file is malformed.
+            pass
+
+    return settings
+
+
+def _link_factor_scaled(latency_ms: float, cfg: Dict[str, float]) -> int:
+    """Return GCP link factor scaled by ENERGY_SCALE (1.0/1.5/2.0 -> 10/15/20)."""
+    intrazone_ms = cfg["gcp.lat.intrazone_ms"]
+    interzone_ms = cfg["gcp.lat.interzone_ms"]
+    energy_scale = int(round(cfg["gcp.energy_scale"]))
+
+    if latency_ms <= intrazone_ms:
+        return int(round(cfg["gcp.factor.intrazone"] * energy_scale))
+    if latency_ms <= interzone_ms:
+        return int(round(cfg["gcp.factor.interzone"] * energy_scale))
+    return int(round(cfg["gcp.factor.crossregion"] * energy_scale))
 
 
 class CSP(PlacementAlgo):
@@ -27,14 +112,19 @@ class CSP(PlacementAlgo):
         - Locality constraints (DZ)
         - Flow conservation for each service link
         - Bandwidth capacity on physical edges
-    - Objective: Minimize total energy = node energy + link energy
-        - Node energy = sum over hosts of (P_STATIC * is_active + P_CPU_UNIT * cpu_used)
-        - Link energy = sum over physical edges of (total_bandwidth_on_edge * latency^2)
+    - Objective: Minimize total energy = node energy + link energy (GCP model)
+        - Node energy = sum over active hosts h of:
+            GCP_PUE * [P_vcpu_idle * cpu_cap[h] + (P_vcpu_active - P_vcpu_idle) * cpu_used[h]]
+        - Link energy = sum over physical edges of:
+            flow_on_edge * latency * factor(link_type)
+          with factor(link_type) = 1.0 (intra-zone), 1.5 (inter-zone), 2.0 (cross-region)
     - Returns mapping and per-edge routing meta.
     """
 
     def place(self, service_graph: ServiceGraph, network_graph: NetworkGraph, **kwargs) -> PlacementResult:
         SG, NG = service_graph.G, network_graph.G
+        cfg = _load_energy_settings(kwargs.get("energy_props_path", ""))
+        energy_scale = max(1, int(round(cfg["gcp.energy_scale"])))
 
         comps = list(SG.nodes())
         hosts = list(NG.nodes())
@@ -87,9 +177,6 @@ class CSP(PlacementAlgo):
         # Mapping for easy lookup
         topo_edges = list(NG.edges(data=True))
     
-        # Max path length to prevent cycles/infinite loops (optional but good for solver)
-        MAX_HOPS = len(hosts) 
-
         service_link_flows = {} 
         
         for l_idx, (sc, dc, d_s) in enumerate(edges):
@@ -165,94 +252,73 @@ class CSP(PlacementAlgo):
             if current_edge_load:
                 model.Add(sum(current_edge_load) <= capacity)
 
-        # 6) Objective Function: Energy
+        # 6) Objective Function: Energy (GCP-aligned)
         
         # A. Node Energy
-        # E_node = sum(P_STATIC * is_active + E_dynamic * cpu_used)
-        node_energy_vars = []
+        # E_node = sum_h_active( GCP_PUE * [P_idle*cpu_cap[h] + (P_active-P_idle)*cpu_used[h]] )
+        # We keep integer linearity via ENERGY_SCALE (deci-Watts).
+        node_energy_terms = []
         for h in hosts:
             # is_active = 1 if cpu_used > 0
             is_active = model.NewBoolVar(f"active_{h}")
             model.Add(cpu_used[h] > 0).OnlyEnforceIf(is_active)
             model.Add(cpu_used[h] == 0).OnlyEnforceIf(is_active.Not())
-            
-            static_part = model.NewIntVar(0, P_STATIC, f"static_{h}")
-            model.Add(static_part == P_STATIC).OnlyEnforceIf(is_active)
-            model.Add(static_part == 0).OnlyEnforceIf(is_active.Not())
-            
-            dynamic_part = model.NewIntVar(0, cpu_cap[h] * P_CPU_UNIT, f"dyn_{h}")
-            model.Add(dynamic_part == cpu_used[h] * P_CPU_UNIT)
-            
-            node_energy_vars.append(static_part)
-            node_energy_vars.append(dynamic_part)
-            
-        total_node_energy = model.NewIntVar(0, sum(cpu_cap.values()) * P_CPU_UNIT + len(hosts) * P_STATIC, "total_node_energy")
-        model.Add(total_node_energy == sum(node_energy_vars))
+
+            static_coeff = int(round(cfg["gcp.pue"] * cfg["gcp.p_vcpu_idle_w"] * cpu_cap[h] * energy_scale))
+            dyn_coeff = int(round(cfg["gcp.pue"] * (cfg["gcp.p_vcpu_active_w"] - cfg["gcp.p_vcpu_idle_w"]) * energy_scale))
+
+            static_part = model.NewIntVar(0, static_coeff, f"node_static_scaled_{h}")
+            model.Add(static_part == static_coeff * is_active)
+
+            dynamic_part = model.NewIntVar(0, cpu_cap[h] * dyn_coeff, f"node_dynamic_scaled_{h}")
+            model.Add(dynamic_part == cpu_used[h] * dyn_coeff)
+
+            node_energy_terms.append(static_part)
+            node_energy_terms.append(dynamic_part)
+
+        total_node_energy_max = sum(
+            int(round(cfg["gcp.pue"] * cfg["gcp.p_vcpu_active_w"] * cpu_cap[h] * energy_scale))
+            for h in hosts
+        )
+        total_node_energy = model.NewIntVar(0, total_node_energy_max, "total_node_energy_scaled")
+        model.Add(total_node_energy == sum(node_energy_terms))
         
         # B. Link Energy
-        # E_link = sum( flow_l * latency_e^2 ) for all service links l, network edges e
-        # where flow_l is bandwidth of service link l
-        
-        # In the reference code:
-        # total_link_energy = sum( flow_on_arc * lat_arc^2 )
-        # where flow_on_arc is total bandwidth on that arc.
-        # This is mathematically equivalent to sum( is_l_on_e * bw_l * lat_e^2 )
-        
-        link_energy_vars = []
-        
-        # Precompute max possible link energy to set bounds
-        max_lat = max([float(d.get('latency') or 0) for _,_,d in topo_edges] + [1])
-        # A rough upper bound
-        max_link_E = int(len(edges) * max([d.get('bandwidth') or 0 for _,_,d in edges] + [1]) * (max_lat**2) * len(hosts))
-
-        total_link_energy = model.NewIntVar(0, max_link_E * len(topo_edges), "total_link_energy")
+        # E_link = sum( flow_l_on_e * bw_l * lat_e * factor(type_e) )
+        # Factor depends on edge latency thresholds (GCP hierarchy).
+        # We accumulate in ENERGY_SCALE units to keep integer arithmetic.
+        link_energy_terms = []
+        total_link_energy_ub = 0
 
         for u_n, v_n, d_n in topo_edges:
             lat = float(d_n.get('latency') or 0)
             if lat <= 0:
                 continue
-                
-            lat_sq = int(lat * lat)
-            
-            # Flow on this specific physical edge
-            edge_flow_vars = []
+
+            factor_scaled = _link_factor_scaled(lat, cfg)
+
             for l_idx, (sc, dc, d_s) in enumerate(edges):
                 bw_req = int(d_s.get('bandwidth') or 0)
+                if bw_req <= 0:
+                    continue
+
                 f = service_link_flows[l_idx].get((u_n, v_n))
                 if f is not None:
-                    edge_flow_vars.append(f * bw_req)
-            
-            if edge_flow_vars:
-                # E_edge = TotalFlow * lat^2
-                #        = Sum(f_l * bw_l) * lat^2
-                #        = Sum(f_l * (bw_l * lat^2))
-                
-                # To keep it integer, ensure bw * lat^2 is int. 
-                # bandwidth is int. lat might be float. 
-                # Reference uses "lat * lat" (integer context likely or rounded).
-                # We cast lat to int earlier if needed, or assume inputs are compatible.
-                # Here we use lat_sq computed above.
-                
-                contrib = model.NewIntVar(0, max_link_E, f"link_E_{u_n}_{v_n}")
-                model.Add(contrib == sum(edge_flow_vars) * lat_sq)
-                link_energy_vars.append(contrib)
+                    coeff_scaled = int(round(bw_req * lat * factor_scaled))
+                    if coeff_scaled <= 0:
+                        continue
+                    link_energy_terms.append(f * coeff_scaled)
+                    total_link_energy_ub += coeff_scaled
 
-        if link_energy_vars:
-            model.Add(total_link_energy == sum(link_energy_vars))
+        total_link_energy = model.NewIntVar(0, max(0, total_link_energy_ub), "total_link_energy_scaled")
+        if link_energy_terms:
+            model.Add(total_link_energy == sum(link_energy_terms))
         else:
             model.Add(total_link_energy == 0)
 
-        # Total Energy
-        # Calculate a safe upper bound based on physical limits
-        max_node_energy = sum(cpu_cap.values()) * P_CPU_UNIT + len(hosts) * P_STATIC
-        total_energy_max = max_node_energy + (max_link_E * len(topo_edges))
-        
-        # Ensure it fits in CP-SAT limits (approx 2^62)
-        # Using a safer upper bound to avoid overflow issues
-        safe_max = (2**50) 
-        total_energy_max = min(total_energy_max, safe_max)
-
-        total_energy = model.NewIntVar(0, total_energy_max, "total_energy")
+        # Total Energy (scaled)
+        total_energy_max = min(total_node_energy_max + max(0, total_link_energy_ub), 2**50)
+        total_energy = model.NewIntVar(0, total_energy_max, "total_energy_scaled")
         model.Add(total_energy == total_node_energy + total_link_energy)
 
         # Minimize
@@ -323,9 +389,11 @@ class CSP(PlacementAlgo):
             paths=paths,
             meta={
                 'status': 'success',
-                'total_energy': solver.Value(total_energy),
-                'node_energy': solver.Value(total_node_energy),
-                'link_energy': solver.Value(total_link_energy),
+                'total_energy': solver.Value(total_energy) / energy_scale,
+                'node_energy': solver.Value(total_node_energy) / energy_scale,
+                'link_energy': solver.Value(total_link_energy) / energy_scale,
+                'energy_scale': energy_scale,
+                'energy_props_path': kwargs.get("energy_props_path") or os.environ.get("CSP_ENERGY_PROPERTIES") or os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")),
                 'solver_status': solver.StatusName(status),
             },
         )
