@@ -1,5 +1,3 @@
-
-
 import os
 import re
 import json
@@ -283,9 +281,10 @@ def _compute_norm_bounds(network_graph: NetworkGraph, service_graph: ServiceGrap
     bounds.cost_max = max(1, total_cost)
     
     # Energy bounds
-    max_flow = max((d.get('bandwidth', 0) for _, _, d in SG.edges(data=True)), default=1)
+    max_flow = sum(d.get('bandwidth', 0) for _, _, d in SG.edges(data=True))  
+    max_flow = max(1, max_flow)    
     bounds.e_link_ub = max(1, max_flow * max_arc_lat * max_arc_lat)
-    
+
     max_cpu = max((NG.nodes[h].get('cpu', 0) for h in NG.nodes()), default=1)
     bounds.e_node_ub = len(NG.nodes()) * (P_STATIC + max_cpu * P_CPU_UNIT)
     bounds.energy_ub = bounds.e_link_ub + bounds.e_node_ub
@@ -333,6 +332,10 @@ def _evaluate_solution(placement: Dict[int, int],
         if c not in sol.placement:
             continue
         h = sol.placement[c]
+        if h not in cu:
+            sol.violations.append(f"Invalid host assignment: C{c} -> H{h} (host does not exist)")
+            sol.feasible = False
+            continue
         cpu_req = SG.nodes[c].get('cpu', 0)
         ram_req = SG.nodes[c].get('ram', 0)
         cu[h] += cpu_req
@@ -361,11 +364,19 @@ def _evaluate_solution(placement: Dict[int, int],
             continue
         hs, ht = sol.placement[u], sol.placement[v]
         bw = data.get('bandwidth', 0)
+        lat_ub = data.get('latency', float('inf'))
         
         if hs == ht:
-            link_lats.append(0)
+            path_lat = 0
+            if path_lat > lat_ub:
+                sol.violations.append(
+                    f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
+                )
+                sol.feasible = False
+
+            link_lats.append(path_lat)
             sol.paths[len(sol.paths)] = [hs]
-            sol.consumed_lat[len(sol.consumed_lat)] = 0
+            sol.consumed_lat[len(sol.consumed_lat)] = path_lat
         else:
             try:
                 path = nx.shortest_path(NG, source=hs, target=ht, weight='latency')
@@ -375,6 +386,12 @@ def _evaluate_solution(placement: Dict[int, int],
                     lat = NG.edges[n1, n2].get('latency', 0)
                     path_lat += lat
                     arc_flow[(n1, n2)] += bw
+
+                if path_lat > lat_ub:
+                    sol.violations.append(
+                        f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
+                    )
+                    sol.feasible = False
                 
                 link_lats.append(path_lat)
                 sol.paths[len(sol.paths)] = path
@@ -479,7 +496,10 @@ def _greedy_placement(network_graph: NetworkGraph,
             ru[best_h] += ram_req
         else:
             # Fallback to first host
-            pl[c] = list(NG.nodes())[0]
+            fallback_h = list(NG.nodes())[0]
+            pl[c] = fallback_h
+            cu[fallback_h] += cpu_req
+            ru[fallback_h] += ram_req
     
     return pl
 
@@ -695,7 +715,7 @@ def _build_opro_prompt(problem_desc: str, trajectory: List, feedback: str,
 # =====================================================================
 class LLMPlacement(PlacementAlgo):
     """LLM-based placement using OPRO (Optimization by PROmpting)
-    Adapeted from the work of Google DeepMind's paper: [LARGE LANGUAGE MODELS AS OPTIMIZERS](https://arxiv.org/pdf/2309.03409) and Farah AIT SALAHT
+    Adapted from the work of Google DeepMind's paper: [LARGE LANGUAGE MODELS AS OPTIMIZERS](https://arxiv.org/pdf/2309.03409) and Farah AIT SALAHT
     """
     def __init__(self, provider: str = "auto", model: str = "auto", 
                  max_iter: int = 5, verbose: bool = True):
@@ -771,6 +791,14 @@ class LLMPlacement(PlacementAlgo):
         metadata['energy_total'] = best.energy_total
         metadata['latency_total'] = best.total_latency
         metadata['cost'] = best.infra_cost
+        metadata['status'] = 'success' if best.feasible else 'failed'
+        if not best.feasible:
+            metadata['violations'] = list(best.violations)
+            metadata['reason'] = (
+                "; ".join(best.violations[:5])
+                if best.violations
+                else "No feasible placement found"
+            )
         
         return PlacementResult(
             mapping=best.placement,
