@@ -130,54 +130,68 @@ COST_PER_1K_TOKENS = {
 # LLM SYSTEM PROMPT
 # =====================================================================
 LLM_SYSTEM = """You are an expert optimizer for the Service Placement Problem (SPP) on Google Cloud Platform (GCP).
-Your goal is to find a placement that MINIMIZES the objective value. Lower is better.
+The infrastructure consists exclusively of GCE VMs (e2/n2/c2 families). There are NO fog nodes, NO edge devices.
+Your goal is to find a placement that MINIMIZES the ENERGY objective. Lower is better.
 
-OBJECTIVE FUNCTION:
-  obj = w_lat * (Lat_e2e * 10000 / lat_ub) * 1000
-      + w_cost * (Cost * 10000 / cost_max) * 1000
-      + w_energy * (Energy * 10000 / energy_ub) * 1000
+OBJECTIVE FUNCTION (ENERGY ONLY):
+  obj = P_total = P_links + P_nodes  (continuous power [W], datastream regime)
 
 WHERE:
-- Lat_e2e = SUM of shortest-path latencies for ALL application links (end-to-end pipeline)
-- Cost = SUM of hostCost[h] for each ACTIVE host (host with >= 1 component placed on it)
-- Energy = E_links + E_nodes
-    - E_links = SUM over links l: bandwidth[l] * SUM(arc_latency * factor(link_type) on path of link l)
-        where factor(link_type) is inferred from latency:
-            intra-zone (<=2ms): 1.0
-            inter-zone (<=25ms): 1.5
-            cross-region (>25ms): 2.0
-    - E_nodes = SUM over active hosts h:
-            GCP_PUE * [P_vcpu_idle * cpu_cap[h] + (P_vcpu_active - P_vcpu_idle) * cpu_used[h]]
-        with GCP_PUE=1.10, P_vcpu_idle=1.0W/vCPU, P_vcpu_active=8.0W/vCPU
+- P_links = SUM over all application links l (GCP-aware model):
+    bandwidth[l] × sp_latency(hs_l, ht_l) × factor(link_type)
+  Link type inferred from measured latency:
+    intra-zone  (sp_latency ≤ 2ms)  : factor = 1.0  — same datacenter fabric
+    inter-zone  (sp_latency ≤ 25ms) : factor = 1.5  — regional backbone
+    cross-region (sp_latency > 25ms) : factor = 2.0  — WAN long-haul (VERY EXPENSIVE)
+  If both endpoints are on the SAME VM, E_link for that link = 0.
 
-CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact):
-1. COLOCATION ELIMINATES LINK COST: Components on the SAME host have 0ms latency and 0 link energy.
-2. CROSS-REGION LINKS ARE EXPENSIVE: factor=2.0 with high latency dominates energy.
-3. SAME-ZONE PREFERRED: <=2ms links are cheapest (factor=1.0).
-4. INTER-ZONE ACCEPTABLE: <=25ms links (factor=1.5) are second-best.
-5. FEWER ACTIVE HOSTS REDUCES NODE POWER, but avoid costly cross-region communication.
-6. DZ CONSTRAINTS ARE ABSOLUTE and CAPACITY IS A HARD WALL.
-7. DO NOT DEFAULT TO H0: avoid trivial "everything on node 0" when it causes link latency violations.
+- P_nodes = SUM over all ACTIVE VMs h (GCP vCPU-slot model, SPECpower calibration):
+    GCP_PUE × [P_vcpu_idle × cpu_cap_h + (P_vcpu_active - P_vcpu_idle) × cpu_used_h]
+  GCP_PUE = 1.10 (uniform, Google Environmental Report 2023)
+  P_vcpu_idle = 1.0 W/vCPU,  P_vcpu_active = 8.0 W/vCPU
+  Examples:
+    e2-standard-2  (2 vCPU) idle=2.2W,  full=17.6W
+    n2-standard-8  (8 vCPU) idle=8.8W,  full=70.4W
+    n2-standard-32 (32vCPU) idle=35.2W, full=281.6W
+  Inactive VMs (cpu_used=0) consume P=0 (VM stopped).
 
-KEY INSIGHT: Minimize cross-region and long-latency traffic first, then consolidate where possible.
+GCP CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact on ENERGY):
+1. SAME-ZONE COLOCATION = ZERO LINK ENERGY: Components on the SAME VM → E_link=0.
+   Always prefer colocation when capacity (CPU+RAM) allows.
+2. CROSS-REGION IS VERY EXPENSIVE: factor=2.0 × high latency = dominant cost.
+   A 100Mbps link across 85ms cross-region costs 100×85×2.0=17000 vs 100×1×1.0=100 intra-zone.
+   ALWAYS prioritize moving cross-region links to same zone.
+3. STAY IN SAME ZONE: Prefer VMs with sp_latency ≤ 2ms from DZ host (factor=1.0).
+   Inter-zone (≤25ms, factor=1.5) is acceptable. Cross-region (>25ms) must be avoided.
+4. GCP-SMALL VMs ARE EFFICIENT: e2 VMs (cpu<8) idle at 1.1W/vCPU.
+   Prefer small VMs over large when communication is local (intra-zone).
+5. FEWER ACTIVE VMs = LOWER E_nodes: Consolidate when all VMs are in same zone.
+6. DZ CONSTRAINTS ARE ABSOLUTE: Fixed components MUST stay on their assigned VM.
+7. CAPACITY IS A HARD WALL: CPU sum <= cpuCap[h] AND RAM sum <= ramCap[h] per VM.
+
+GCP PLACEMENT STRATEGY:
+1. First: can ALL free components fit on the DZ VM (H0) or an intra-zone VM? → best option.
+2. Second: if not, use 2 VMs both in the same zone (sp_latency ≤ 2ms from H0).
+3. Third: if not, use VMs in the same region (sp_latency ≤ 25ms). 
+4. NEVER: place components on cross-region VMs (sp_latency > 25ms) unless forced.
 
 OPTIMIZATION TRAJECTORY:
-Below you will see PREVIOUS placement attempts with their objective scores, sorted from worst to best.
-Study the patterns: solutions with LOWER scores reduce cross-region links and keep traffic local.
+Below you will see PREVIOUS placement attempts with their objective scores (ENERGY in Watts), sorted from worst to best.
+Study the patterns: solutions with LOWER scores use same-zone VMs and avoid cross-region links.
 Generate a NEW placement that achieves a LOWER objective than ALL previous attempts.
 
 REASONING PROTOCOL:
-1. Examine the best previous solution — what makes it good?
-2. Identify ONE specific change that could improve it (move a component, consolidate hosts)
-3. VERIFY the change respects ALL constraints (DZ, CPU, RAM)
-4. Compute expected impact: will latency decrease? Will energy decrease?
-5. Output the improved placement
+1. Examine the FEEDBACK — which links are cross-region (factor=2.0)?
+2. For each cross-region link: can both endpoints move to the same zone?
+3. VERIFY: CPU+RAM capacity on the target zone VM.
+4. Compute expected savings: bw × lat × (2.0 - 1.0) per cross-region link eliminated.
+5. Output the improved placement.
 
 HARD CONSTRAINTS (any violation = infeasible = rejected):
-- DZ: component must be on its assigned host
-- CPU: sum of cpuComp on host h <= cpuCap[h]
-- RAM: sum of ramComp on host h <= ramCap[h]
-- Connectivity: path must exist between hosts of linked components
+- DZ: component must be on its assigned VM
+- CPU: sum of cpuComp on VM h <= cpuCap[h]
+- RAM: sum of ramComp on VM h <= ramCap[h]
+- Connectivity: path must exist between VMs of linked components
 
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences, no extra text:
 {"placement": {"0": host_id, "1": host_id, ...}, "reasoning": "what you changed and why"}"""
@@ -524,19 +538,12 @@ def _evaluate_solution(placement: Dict[int, int],
     )
     sol.energy_total = sol.energy_link + sol.energy_node
     
-    # Objective
+    # Objective (ENERGY ONLY - direct raw value in Watts)
     if sol.feasible:
-        def norm_int(val, ub):
-            return int((val * NORM) / max(ub, 1))
-        
-        lat_n = norm_int(sol.total_latency, bounds.lat_ub)
-        cost_n = norm_int(sol.infra_cost, bounds.cost_max)
-        ener_n = norm_int(sol.energy_total, bounds.energy_ub)
-        
-        W = 1000
-        wl, wc, we = int(w_lat * W), int(w_cost * W), int(w_energy * W)
-        sol.objective_int = lat_n * wl + cost_n * wc + ener_n * we
-        sol.objective = float(sol.objective_int)
+        # Raw energy in Watts (P_total = P_links + P_nodes)
+        sol.objective = sol.energy_total
+        # Convert to milliwatts for integer comparison (preserve precision)
+        sol.objective_int = int(sol.energy_total * 1000)
     else:
         sol.objective_int = 10 ** 9
         sol.objective = float("inf")
@@ -763,21 +770,21 @@ def _build_opro_trajectory(trajectory: List[Tuple[float, Dict[int, int], str]],
                            max_shown: int = 20) -> str:
     """Build compact optimization trajectory (worst→best)"""
     if not trajectory:
-        return ""
+        return "\n=== NO TRAJECTORY YET ==="
     
     # Keep best N, sort worst→best
     shown = sorted(trajectory, key=lambda x: -x[0])[-max_shown:]
     shown.sort(key=lambda x: x[0], reverse=True)
     
-    lines = ["\n=== TRAJECTORY (worst→best, LOWER=BETTER) ==="]
+    lines = ["\n=== TRAJECTORY (worst→best, LOWER ENERGY=BETTER) ==="]
     for i, (score, pl, reasoning) in enumerate(shown):
         active = len(set(pl.values()))
         pl_compact = ",".join(f"{c}:{h}" for c, h in sorted(pl.items()))
         insight = f" | {reasoning[:80]}" if reasoning else ""
-        lines.append(f"  #{i+1} score={score} hosts={active} [{pl_compact}]{insight}")
+        lines.append(f"  #{i+1} Energy={score:.2f}W hosts={active} [{pl_compact}]{insight}")
     
     best_score = shown[-1][0] if shown else float("inf")
-    lines.append(f"\nBEST={best_score}. Generate NEW placement with score < {best_score}.")
+    lines.append(f"\nBEST ENERGY={best_score:.2f}W. Generate NEW placement with LOWER energy.")
     return "\n".join(lines)
 
 
@@ -826,14 +833,18 @@ def _build_problem_description(network_graph: NetworkGraph,
             ci, hi = dz_data[i], dz_data[i+1]
             lines.append(f"  C{ci} MUST be on H{hi}")
     
-    # Objective weights
-    lines.append(f"\n=== OBJECTIVE WEIGHTS ===")
-    lines.append(f"w_lat={w[0]}, w_cost={w[1]}, w_energy={w[2]}")
-    lines.append(f"Bounds: lat_ub={bounds.lat_ub:.0f}, cost_max={bounds.cost_max:.0f}, energy_ub={bounds.energy_ub:.0f}")
+    # Objective (ENERGY ONLY)
+    lines.append(f"\n=== OBJECTIVE: MINIMIZE ENERGY (Watts) ===")
+    lines.append(f"obj = P_total = P_links + P_nodes")
     cfg = _load_energy_settings()
+    lines.append(f"\nEnergy model GCP:")
     lines.append(
-        f"Energy model: E_links=bw*lat*factor, factor(intra/inter/cross)="
-        f"{cfg['gcp.factor.intrazone']}/{cfg['gcp.factor.interzone']}/{cfg['gcp.factor.crossregion']}"
+        f"  P_links: bw × sp_latency × factor  (factor: intra-zone={cfg['gcp.factor.intrazone']:.1f}, "
+        f"inter-zone={cfg['gcp.factor.interzone']:.1f}, cross-region={cfg['gcp.factor.crossregion']:.1f})"
+    )
+    lines.append(
+        f"  P_nodes: GCP_PUE × [P_vcpu_idle×cpu_cap + (P_vcpu_active-P_vcpu_idle)×cpu_used]  "
+        f"(PUE={cfg['gcp.pue']:.2f}, P_idle={cfg['gcp.p_vcpu_idle_w']:.1f}W/vCPU, P_active={cfg['gcp.p_vcpu_active_w']:.1f}W/vCPU)"
     )
     
     return "\n".join(lines)
@@ -852,9 +863,9 @@ def _build_opro_prompt(problem_desc: str, trajectory: List, feedback: str,
     
     # Best known
     if best and best.feasible:
-        parts.append(f"\n--- BEAT THIS: score={best.objective_int} "
-                     f"hosts={sorted(best.active_hosts)} "
-                     f"lat={best.total_latency}ms E={best.energy_total} ---")
+        parts.append(f"\n--- BEAT THIS: Energy={best.objective:.2f}W "
+                     f"(P_links={best.energy_link:.2f}W + P_nodes={best.energy_node:.2f}W) "
+                     f"hosts={sorted(best.active_hosts)} ---")
         parts.append(f"Placement: {best.placement}")
     
     # Strategy hint
@@ -983,14 +994,14 @@ class LLMPlacement(PlacementAlgo):
         for name, pl in seeds:
             sol = _evaluate_solution(pl, network_graph, service_graph, bounds, *w)
             trajectory.append((
-                sol.objective_int if sol.feasible else 10**9,
+                sol.objective if sol.feasible else float('inf'),
                 dict(sol.placement),
                 name
             ))
             if sol.feasible and (best is None or sol.objective < best.objective):
                 best = sol
                 if self.verbose:
-                    print(f"      {name}: obj={sol.objective_int} *BEST*")
+                    print(f"      {name}: Energy={sol.objective:.2f}W *BEST*")
         
         # Phase 2: Build problem description
         problem_desc = _build_problem_description(network_graph, service_graph, bounds, w)
@@ -1070,9 +1081,9 @@ class LLMPlacement(PlacementAlgo):
             except Exception:
                 pass
             
-            # Add to trajectory
+            # Add to trajectory (use raw energy for sorting/display)
             trajectory.append((
-                sol.objective_int if sol.feasible else 10**9,
+                sol.objective if sol.feasible else float('inf'),
                 dict(sol.placement),
                 reasoning or f"LLM iter {it}"
             ))
@@ -1084,11 +1095,11 @@ class LLMPlacement(PlacementAlgo):
                 step_improved = True
                 stale_iterations = 0
                 if self.verbose:
-                    print(f"obj={sol.objective_int} *BEST*")
+                    print(f"Energy={sol.objective:.2f}W *BEST*")
             else:
                 stale_iterations += 1
                 if self.verbose:
-                    print(f"obj={sol.objective_int}")
+                    print(f"Energy={sol.objective:.2f}W")
         
         # Fallback to greedy if no solution
         if best is None:
