@@ -45,10 +45,10 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
-apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim || {
+apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3.12-venv vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv vim
+    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
 }
 
 # Install zookeeper separately (can fail on some systems)
@@ -65,7 +65,7 @@ java -version
 echo "Installing Apache Storm..."
 STORM_VER="2.8.3"
 cd /tmp
-wget -q https://downloads.apache.org/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
+wget -q https://archive.apache.org/dist/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
 tar -zxf apache-storm-$STORM_VER.tar.gz
 mv apache-storm-$STORM_VER /usr/local/storm
 
