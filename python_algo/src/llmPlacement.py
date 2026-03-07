@@ -367,7 +367,9 @@ def _evaluate_solution(placement: Dict[int, int],
         lat_ub = data.get('latency', float('inf'))
         
         if hs == ht:
+            # Colocated case: path_lat = 0, which should always satisfy latency constraint
             path_lat = 0
+            # Enforce latency constraint explicitly
             if path_lat > lat_ub:
                 sol.violations.append(
                     f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
@@ -387,6 +389,7 @@ def _evaluate_solution(placement: Dict[int, int],
                     path_lat += lat
                     arc_flow[(n1, n2)] += bw
 
+                # Enforce latency constraint: path latency must not exceed limit
                 if path_lat > lat_ub:
                     sol.violations.append(
                         f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
