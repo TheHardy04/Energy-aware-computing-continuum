@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * <h1>TopologyFromCSV </h1>
+ * <h1>TopologyFromProperties </h1>
  * Generates Apache Storm topologies from application properties files
  * <p>
  * Reads properties files (e.g., Appli_4comps.properties, Appli_10comps_dcns.properties)
@@ -34,12 +34,12 @@ import java.util.regex.Pattern;
  * <li>component.DZ (optional) = {componentId,nodeId}, ... (placement constraints)</li>
  *
  * <h2>Usage:</h2>
- *  <li> Local mode:  {@code java ... TopologyFromCSV path/to/properties/file.properties}</li>
- *  <li> Cluster:     {@code java ... TopologyFromCSV path/to/properties/file.properties <topologyName>}</li>
+ *  <li> Local mode:  {@code java ... TopologyFromProperties path/to/properties/file.properties}</li>
+ *  <li> Cluster:     {@code java ... TopologyFromProperties path/to/properties/file.properties <topologyName>}</li>
  *
  * @author Theo Hardy
  */
-public class TopologyFromCSV {
+public class TopologyFromProperties {
 
     // Component specification from properties file
     static class Component {
@@ -296,13 +296,13 @@ public class TopologyFromCSV {
     // -------------------- MAIN --------------------
     public static void main(String[] args) throws Exception {
         if (args == null || args.length < 1) {
-            System.err.println("Usage: TopologyFromCSV <propertiesFile> [topologyName]");
-            System.err.println("Example: TopologyFromCSV ../python_algo/properties/Appli_4comps.properties MyTopology");
+            System.err.println("Usage: TopologyFromProperties <propertiesFile> [topologyName]");
+            System.err.println("Example: TopologyFromProperties ../python_algo/properties/Appli_4comps.properties MyTopology");
             System.exit(1);
         }
 
         String propertiesFile = args[0];
-        String topologyName = (args.length > 1) ? args[1] : "TopologyFromCSV";
+        String topologyName = (args.length > 1) ? args[1] : "TopologyFromProperties";
 
         System.out.println("Loading application properties from: " + propertiesFile);
         Properties props = loadProperties(propertiesFile);

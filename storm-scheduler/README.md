@@ -22,7 +22,7 @@ This project implements energy-aware scheduling for Apache Storm in fog/edge/clo
 
 ## Features
 
-1. **TopologyFromCSV** ⭐ - Generate Storm topologies from application properties files
+1. **TopologyFromProperties** - Generate Storm topologies from application properties files
 2. **TestTopology** - Synthetic 6-bolt benchmark topology
 3. **Custom Schedulers** - Energy-aware scheduling algorithms
 4. **Shell Scripts** - Convenient cluster management (see [scripts/README.md](scripts/README.md))
@@ -41,7 +41,7 @@ Ubuntu `22.04` and `24.04` was used for testing.
 ```shell
 # Update package list and install Java 17 
 apt-get update
-apt-get install -y openjdk-17-jdk-headless wget python3 tar
+apt-get install -y openjdk-17-jdk-headless wget tar
 
 # Verify Java installation
 java -version
@@ -58,6 +58,12 @@ mv apache-storm-$STORM_VER /usr/local/storm
 # Add binaries to PATH
 export PATH=$PATH:/usr/local/storm/bin
 ```
+
+For GCP worker nodes provisioned with `gcp_automations/vm_startup.sh`, startup is intentionally minimal:
+
+- Java/Storm runtime dependencies only
+- No Python/venv bootstrap on workers
+- Faster first boot for Storm supervisor nodes
 
 ## GCP
 

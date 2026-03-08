@@ -45,10 +45,10 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
-apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3.12-venv vim || {
+apt-get install -y -qq openjdk-17-jdk-headless wget tar git maven vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
+    apt-get install -y openjdk-17-jdk-headless wget tar git maven vim
 }
 
 # Zookeeper is not needed on worker nodes (only on master)
@@ -174,13 +174,6 @@ if ! grep -q '^export STORM_HOME=/usr/local/storm$' /home/storm/.bashrc 2>/dev/n
     echo 'export STORM_HOME=/usr/local/storm' >> /home/storm/.bashrc
 fi
 chown storm:storm /home/storm/.env /home/storm/.bashrc
-
-# Setup python virtual environment for storm user
-sudo -u storm python3 -m venv /home/storm/venv
-chown -R storm:storm /home/storm/venv
-source /home/storm/venv/bin/activate
-pip install --upgrade pip || echo "⚠ Warning: pip upgrade failed, continuing with existing pip version"
-pip install -r /home/storm/Energy-aware-computing-continuum/python_algo/requirements.txt || echo "⚠ Warning: Failed to install Python dependencies, please check the requirements.txt file and your network connection."
 
 # Create placement CSV directory
 mkdir -p /etc/storm

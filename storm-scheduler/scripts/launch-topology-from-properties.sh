@@ -10,7 +10,7 @@ cd "$PROJECT_ROOT"
 
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
-TOPOLOGY_CLASS="fr.dvrc.thardy.topology.TopologyFromCSV"
+TOPOLOGY_CLASS="fr.dvrc.thardy.topology.TopologyFromProperties"
 
 # Check for arguments
 if [ $# -lt 1 ]; then
@@ -23,7 +23,7 @@ if [ $# -lt 1 ]; then
 fi
 
 PROPERTIES_FILE="$1"
-TOPOLOGY_NAME="${2:-TopologyFromCSV}"
+TOPOLOGY_NAME="${2:-TopologyFromProperties}"
 
 # Check if properties file exists
 if [ ! -f "$PROPERTIES_FILE" ]; then
@@ -32,7 +32,7 @@ if [ ! -f "$PROPERTIES_FILE" ]; then
 fi
 
 # Clean and build the project using Maven
-echo "==================== Building TopologyFromCSV... ===================="
+echo "==================== Building TopologyFromProperties... ===================="
 mvn clean package
 
 # Check if the build was successful

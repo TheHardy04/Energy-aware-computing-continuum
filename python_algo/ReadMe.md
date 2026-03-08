@@ -91,3 +91,20 @@ network.topology={src,dst,bandwidth,latency},...
 - Constraint checks (DZ, CPU/RAM, connectivity, bandwidth)
 - Evaluation with GCP-aligned energy metrics
 - CSV export and optional plotting
+
+## GCP Integration
+
+The infrastructure properties files in `python_algo/properties/` can be used directly by:
+
+- `gcp_automations/deploy_gcp_from_properties.py`
+
+Example:
+
+```bash
+python .\gcp_automations\deploy_gcp_from_properties.py .\python_algo\properties\Infra_5nodes_GCP.properties
+```
+
+Notes:
+
+- VM sizing is derived from `hosts.configuration` tuples (`{cpu, ram}`).
+- Worker provisioning is now Java/Storm-focused for faster startup (no Python virtual environment installation on workers).
