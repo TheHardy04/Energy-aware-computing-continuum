@@ -132,7 +132,7 @@ echo "Generating Storm configuration with Nimbus at $NIMBUS_IP"
 # Generate storm.yaml dynamically with worker settings
 cat > /usr/local/storm/conf/storm.yaml << STORM_CONFIG
 storm.zookeeper.servers:
-  - "localhost"
+  - "$NIMBUS_IP"
 
 nimbus.seeds: ["$NIMBUS_IP"]
 

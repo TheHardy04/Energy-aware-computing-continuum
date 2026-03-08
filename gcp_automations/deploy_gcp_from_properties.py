@@ -41,7 +41,7 @@ def run_gcloud(cmd, ignore_errors=False):
     # Print the command so you can track progress
     print(f"   [Debug] Running: {' '.join(cmd)}") 
     
-    result = subprocess.run(cmd, shell=False, capture_output=True, text=True)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0 and not ignore_errors:
         print(f"❌ Error running command: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout.strip(), result.returncode
@@ -141,9 +141,6 @@ def main():
             f'--metadata-from-file=startup-script={MASTER_STARTUP_SCRIPT}',
             '--tags=storm-node'
         ]
-    if not validate_ip(nimbus_ip):
-        print(f"❌ Invalid IP address format: {nimbus_ip}. Exiting.")
-        sys.exit(1)
         run_gcloud(cmd_master)
         print("⏳ Waiting 5 seconds for network allocation...")
         time.sleep(5)
@@ -151,6 +148,9 @@ def main():
     nimbus_ip = get_vm_ip(MASTER_NAME)
     if not nimbus_ip:
         print("❌ Failed to retrieve Nimbus IP. Exiting.")
+        sys.exit(1)
+    if not validate_ip(nimbus_ip):
+        print(f"❌ Invalid IP address format: {nimbus_ip}. Exiting.")
         sys.exit(1)
     print(f"✅ Master Internal IP is: {nimbus_ip}")
 
