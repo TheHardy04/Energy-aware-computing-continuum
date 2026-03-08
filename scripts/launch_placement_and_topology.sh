@@ -17,14 +17,14 @@ if [ $# -lt 3 ]; then
     echo "Usage: $0 <infra_properties_file> <app_properties_file> <mapping_csv_file>"
     echo ""
     echo "Example:"
-    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_4comps.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv"
+    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_4comps_GCP.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv"
     exit 1
 fi
 
 # launch python algo placement
 echo "===================== Running python placement algorithm ... ===================="
 # venv activation
-source "$PROJECT_ROOT/venv/bin/activate"
+source ".$PROJECT_ROOT/venv/bin/activate"
 # run the placement algorithm
 python "$PROJECT_ROOT/python_algo/main.py" --infra "$1" --app "$2" --to-csv "$PROJECT_ROOT/result/placement.csv"
 if [ $? -ne 0 ]; then
