@@ -14,12 +14,11 @@ import networkx as nx
 from src.placementAlgo import PlacementAlgo, PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
+from src.gcpEnergyModel import _load_energy_settings, link_factor, node_power_w
 
 # =====================================================================
 # CONSTANTS
 # =====================================================================
-P_STATIC = 200
-P_CPU_UNIT = 5
 NORM = 10000
 INF_V = 10 ** 9
 P_CPU_LOCAL = float(os.environ.get("P_CPU_WATTS", "45"))  # Watts
@@ -43,55 +42,69 @@ COST_PER_1K_TOKENS = {
 # =====================================================================
 # LLM SYSTEM PROMPT
 # =====================================================================
-LLM_SYSTEM = """You are an expert optimizer for the Service Placement Problem (SPP) in Fog Computing.
-Your goal is to find a placement that MINIMIZES the objective value. Lower is better.
+LLM_SYSTEM = """You are an expert optimizer for the Service Placement Problem (SPP) on Google Cloud Platform (GCP).
+The infrastructure consists exclusively of GCE VMs (e2/n2/c2 families). There are NO fog nodes, NO edge devices.
+Your goal is to find a placement that MINIMIZES the ENERGY objective. Lower is better.
 
-OBJECTIVE FUNCTION:
-  obj = w_lat * (Lat_e2e * 10000 / lat_ub) * 1000
-      + w_cost * (Cost * 10000 / cost_max) * 1000
-      + w_energy * (Energy * 10000 / energy_ub) * 1000
+OBJECTIVE FUNCTION (ENERGY ONLY):
+  obj = P_total = P_links + P_nodes  (continuous power [W], datastream regime)
 
 WHERE:
-- Lat_e2e = SUM of shortest-path latencies for ALL application links (end-to-end pipeline)
-- Cost = SUM of hostCost[h] for each ACTIVE host (host with >= 1 component placed on it)
-- Energy = E_links + E_nodes
-  - E_links = SUM over links l: bandwidth[l] * SUM(arc_latency^2 on path of link l)
-  - E_nodes = SUM over active hosts h: (200 + cpu_used[h] * 5)
+- P_links = SUM over all application links l (GCP-aware model):
+    bandwidth[l] × sp_latency(hs_l, ht_l) × factor(link_type)
+  Link type inferred from measured latency:
+    intra-zone  (sp_latency ≤ 2ms)  : factor = 1.0  — same datacenter fabric
+    inter-zone  (sp_latency ≤ 25ms) : factor = 1.5  — regional backbone
+    cross-region (sp_latency > 25ms) : factor = 2.0  — WAN long-haul (VERY EXPENSIVE)
+  If both endpoints are on the SAME VM, E_link for that link = 0.
 
-CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact):
-1. COLOCATION ELIMINATES COST: Components on the SAME host have 0ms latency AND 0 link energy.
-2. BUT E_LINKS CAN DOMINATE: E_links = bw * lat^2 grows QUADRATICALLY with distance.
-   When total bandwidth is high, spreading across NEARBY hosts (low lat) beats consolidation
-   on a DISTANT host. Compare: 5 hosts all at 2ms = E_links~160 vs 1 host at 40ms = E_links~1.6M.
-3. FEWER HOSTS ≠ ALWAYS BETTER: Each host costs only P_static=200 node energy.
-   Adding 1 nearby host (+200 energy) is worth it if it saves thousands in link energy.
-4. DISTANCE IS SQUARED: Link energy grows with latency^2, so use the NEAREST available hosts.
-5. DZ CONSTRAINTS ARE ABSOLUTE: Fixed components MUST stay on their assigned host.
-6. CAPACITY IS A HARD WALL: CPU sum <= cpuCap[h] AND RAM sum <= ramCap[h] per host.
+- P_nodes = SUM over all ACTIVE VMs h (GCP vCPU-slot model, SPECpower calibration):
+    GCP_PUE × [P_vcpu_idle × cpu_cap_h + (P_vcpu_active - P_vcpu_idle) × cpu_used_h]
+  GCP_PUE = 1.10 (uniform, Google Environmental Report 2023)
+  P_vcpu_idle = 1.0 W/vCPU,  P_vcpu_active = 8.0 W/vCPU
+  Examples:
+    e2-standard-2  (2 vCPU) idle=2.2W,  full=17.6W
+    n2-standard-8  (8 vCPU) idle=8.8W,  full=70.4W
+    n2-standard-32 (32vCPU) idle=35.2W, full=281.6W
+  Inactive VMs (cpu_used=0) consume P=0 (VM stopped).
 
-KEY INSIGHT: The optimal placement often uses MORE hosts than you'd expect,
-as long as those hosts are CLOSE to each other and to DZ hosts.
-A 5-host solution with all hosts within 2ms of each other beats a 2-host solution
-with hosts 40ms apart.
+GCP CRITICAL OPTIMIZATION PRINCIPLES (ranked by impact on ENERGY):
+1. SAME-ZONE COLOCATION = ZERO LINK ENERGY: Components on the SAME VM → E_link=0.
+   Always prefer colocation when capacity (CPU+RAM) allows.
+2. CROSS-REGION IS VERY EXPENSIVE: factor=2.0 × high latency = dominant cost.
+   A 100Mbps link across 85ms cross-region costs 100×85×2.0=17000 vs 100×1×1.0=100 intra-zone.
+   ALWAYS prioritize moving cross-region links to same zone.
+3. STAY IN SAME ZONE: Prefer VMs with sp_latency ≤ 2ms from DZ host (factor=1.0).
+   Inter-zone (≤25ms, factor=1.5) is acceptable. Cross-region (>25ms) must be avoided.
+4. GCP-SMALL VMs ARE EFFICIENT: e2 VMs (cpu<8) idle at 1.1W/vCPU.
+   Prefer small VMs over large when communication is local (intra-zone).
+5. FEWER ACTIVE VMs = LOWER E_nodes: Consolidate when all VMs are in same zone.
+6. DZ CONSTRAINTS ARE ABSOLUTE: Fixed components MUST stay on their assigned VM.
+7. CAPACITY IS A HARD WALL: CPU sum <= cpuCap[h] AND RAM sum <= ramCap[h] per VM.
+
+GCP PLACEMENT STRATEGY:
+1. First: can ALL free components fit on the DZ VM (H0) or an intra-zone VM? → best option.
+2. Second: if not, use 2 VMs both in the same zone (sp_latency ≤ 2ms from H0).
+3. Third: if not, use VMs in the same region (sp_latency ≤ 25ms). 
+4. NEVER: place components on cross-region VMs (sp_latency > 25ms) unless forced.
 
 OPTIMIZATION TRAJECTORY:
-Below you will see PREVIOUS placement attempts with their objective scores, sorted from worst to best.
-Study the patterns: solutions with LOWER scores use FEWER hosts, COLOCATE more components,
-and place free components CLOSE to DZ-constrained hosts.
+Below you will see PREVIOUS placement attempts with their objective scores (ENERGY in Watts), sorted from worst to best.
+Study the patterns: solutions with LOWER scores use same-zone VMs and avoid cross-region links.
 Generate a NEW placement that achieves a LOWER objective than ALL previous attempts.
 
 REASONING PROTOCOL:
-1. Examine the best previous solution — what makes it good?
-2. Identify ONE specific change that could improve it (move a component, consolidate hosts)
-3. VERIFY the change respects ALL constraints (DZ, CPU, RAM)
-4. Compute expected impact: will latency decrease? Will energy decrease?
-5. Output the improved placement
+1. Examine the FEEDBACK — which links are cross-region (factor=2.0)?
+2. For each cross-region link: can both endpoints move to the same zone?
+3. VERIFY: CPU+RAM capacity on the target zone VM.
+4. Compute expected savings: bw × lat × (2.0 - 1.0) per cross-region link eliminated.
+5. Output the improved placement.
 
 HARD CONSTRAINTS (any violation = infeasible = rejected):
-- DZ: component must be on its assigned host
-- CPU: sum of cpuComp on host h <= cpuCap[h]
-- RAM: sum of ramComp on host h <= ramCap[h]
-- Connectivity: path must exist between hosts of linked components
+- DZ: component must be on its assigned VM
+- CPU: sum of cpuComp on VM h <= cpuCap[h]
+- RAM: sum of ramComp on VM h <= ramCap[h]
+- Connectivity: path must exist between VMs of linked components
 
 OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences, no extra text:
 {"placement": {"0": host_id, "1": host_id, ...}, "reasoning": "what you changed and why"}"""
@@ -259,19 +272,19 @@ def _parse_llm_json(response: str, nbC: int) -> Optional[Dict[int, int]]:
 def _compute_norm_bounds(network_graph: NetworkGraph, service_graph: ServiceGraph) -> NormBounds:
     """Compute normalization bounds for objective function"""
     bounds = NormBounds()
+    cfg = _load_energy_settings()
     
     NG = network_graph.G
     SG = service_graph.G
     
-    # Get diameter
-    diameter = network_graph.metadata.get('network.diameter', len(NG.nodes()))
-    
-    # Max arc latency
-    max_arc_lat = max((d.get('latency', 1) for _, _, d in NG.edges(data=True)), default=1)
-    
-    # Latency upper bound
+    # Latency upper bound (sum of per-link SP latency worst case)
+    lengths = dict(nx.all_pairs_dijkstra_path_length(NG, weight='latency'))
+    lat_diameter = max(
+        (lengths[u][v] for u in lengths for v in lengths[u]),
+        default=float(network_graph.metadata.get('network.diameter', len(NG.nodes())))
+    )
     nbL = SG.number_of_edges()
-    bounds.lat_ub = max(1, nbL * diameter * max_arc_lat)
+    bounds.lat_ub = max(1, nbL * lat_diameter)
     
     # Cost upper bound (assuming all hosts may have a cost attribute, default to CPU)
     total_cost = sum(
@@ -280,13 +293,17 @@ def _compute_norm_bounds(network_graph: NetworkGraph, service_graph: ServiceGrap
     )
     bounds.cost_max = max(1, total_cost)
     
-    # Energy bounds
+    # Energy bounds (GCP model)
     max_flow = sum(d.get('bandwidth', 0) for _, _, d in SG.edges(data=True))  
-    max_flow = max(1, max_flow)    
-    bounds.e_link_ub = max(1, max_flow * max_arc_lat * max_arc_lat)
+    max_flow = max(1, max_flow)
+    bounds.e_link_ub = max(1, max_flow * lat_diameter * cfg["gcp.factor.crossregion"])
 
-    max_cpu = max((NG.nodes[h].get('cpu', 0) for h in NG.nodes()), default=1)
-    bounds.e_node_ub = len(NG.nodes()) * (P_STATIC + max_cpu * P_CPU_UNIT)
+    max_p_eff = max(
+        (cfg["gcp.pue"] * cfg["gcp.p_vcpu_active_w"] * (NG.nodes[h].get('cpu', 0) or 0)
+         for h in NG.nodes()),
+        default=1.0
+    )
+    bounds.e_node_ub = max(1, int(len(NG.nodes()) * max_p_eff))
     bounds.energy_ub = bounds.e_link_ub + bounds.e_node_ub
     
     return bounds
@@ -304,6 +321,7 @@ def _evaluate_solution(placement: Dict[int, int],
     
     NG = network_graph.G
     SG = service_graph.G
+    cfg = _load_energy_settings()
     nbC = SG.number_of_nodes()
     nbH = NG.number_of_nodes()
     
@@ -372,7 +390,7 @@ def _evaluate_solution(placement: Dict[int, int],
             # Enforce latency constraint explicitly
             if path_lat > lat_ub:
                 sol.violations.append(
-                    f"Latency violation on link C{u}→C{v}: {path_lat} > {lat_ub}"
+                    f"Latency violation on link C{u}->C{v}: {path_lat} > {lat_ub}"
                 )
                 sol.feasible = False
 
@@ -400,7 +418,7 @@ def _evaluate_solution(placement: Dict[int, int],
                 sol.paths[len(sol.paths)] = path
                 sol.consumed_lat[len(sol.consumed_lat)] = path_lat
             except nx.NetworkXNoPath:
-                sol.violations.append(f"No path between H{hs} and H{ht} for link C{u}→C{v}")
+                sol.violations.append(f"No path between H{hs} and H{ht} for link C{u}->C{v}")
                 sol.feasible = False
                 link_lats.append(INF_V)
     
@@ -409,7 +427,7 @@ def _evaluate_solution(placement: Dict[int, int],
         if NG.has_edge(u, v):
             bw_cap = NG.edges[u, v].get('bandwidth', 0)
             if bw_cap > 0 and flow > bw_cap:
-                sol.violations.append(f"Link H{u}→H{v} bandwidth overflow: {flow} > {bw_cap}")
+                sol.violations.append(f"Link H{u}->H{v} bandwidth overflow: {flow} > {bw_cap}")
                 sol.feasible = False
     
     # Metrics
@@ -422,27 +440,23 @@ def _evaluate_solution(placement: Dict[int, int],
         for h in sol.active_hosts
     )
     
-    # Energy
+    # Energy (GCP model)
     sol.energy_link = sum(
-        fl * NG.edges[u, v].get('latency', 0) ** 2
+        fl * NG.edges[u, v].get('latency', 0) * link_factor(float(NG.edges[u, v].get('latency', 0)), cfg)
         for (u, v), fl in arc_flow.items()
     )
-    sol.energy_node = sum(P_STATIC + cu[h] * P_CPU_UNIT for h in sol.active_hosts)
+    sol.energy_node = sum(
+        node_power_w(cu[h], int(NG.nodes[h].get('cpu', 0) or 0), cfg)
+        for h in sol.active_hosts
+    )
     sol.energy_total = sol.energy_link + sol.energy_node
     
-    # Objective
+    # Objective (ENERGY ONLY - direct raw value in Watts)
     if sol.feasible:
-        def norm_int(val, ub):
-            return int((val * NORM) / max(ub, 1))
-        
-        lat_n = norm_int(sol.total_latency, bounds.lat_ub)
-        cost_n = norm_int(sol.infra_cost, bounds.cost_max)
-        ener_n = norm_int(sol.energy_total, bounds.energy_ub)
-        
-        W = 1000
-        wl, wc, we = int(w_lat * W), int(w_cost * W), int(w_energy * W)
-        sol.objective_int = lat_n * wl + cost_n * wc + ener_n * we
-        sol.objective = float(sol.objective_int)
+        # Raw energy in Watts (P_total = P_links + P_nodes)
+        sol.objective = sol.energy_total
+        # Convert to milliwatts for integer comparison (preserve precision)
+        sol.objective_int = int(sol.energy_total * 1000)
     else:
         sol.objective_int = 10 ** 9
         sol.objective = float("inf")
@@ -455,9 +469,13 @@ def _evaluate_solution(placement: Dict[int, int],
 # =====================================================================
 def _greedy_placement(network_graph: NetworkGraph, 
                       service_graph: ServiceGraph) -> Dict[int, int]:
-    """Simple greedy First-Fit Decreasing placement"""
+    """Latency-aware greedy placement used as robust fallback for LLM."""
     NG = network_graph.G
     SG = service_graph.G
+    cfg = _load_energy_settings()
+
+    # Precompute shortest-path latencies once to avoid repeated graph traversals.
+    sp_len = dict(nx.all_pairs_dijkstra_path_length(NG, weight='latency'))
     
     pl = {}
     cu = {h: 0 for h in NG.nodes()}
@@ -465,33 +483,78 @@ def _greedy_placement(network_graph: NetworkGraph,
     
     # Handle DZ
     dz_data = service_graph.metadata.get('component.DZ', [])
+    dz_hosts = set()
     if dz_data and len(dz_data) >= 2:
         for i in range(0, len(dz_data), 2):
             if i+1 >= len(dz_data):
                 break
             ci, hi = dz_data[i], dz_data[i+1]
             pl[ci] = hi
+            dz_hosts.add(hi)
             cpu_req = SG.nodes[ci].get('cpu', 0)
             ram_req = SG.nodes[ci].get('ram', 0)
             cu[hi] += cpu_req
             ru[hi] += ram_req
-    
-    # Place remaining components
-    for c in SG.nodes():
+
+    # Place remaining components in decreasing CPU order.
+    comp_order = sorted(
+        [c for c in SG.nodes() if c not in pl],
+        key=lambda c: (SG.nodes[c].get('cpu', 0), SG.degree(c)),
+        reverse=True,
+    )
+
+    for c in comp_order:
         if c in pl:
             continue
         
         cpu_req = SG.nodes[c].get('cpu', 0)
         ram_req = SG.nodes[c].get('ram', 0)
         
-        # Find first fit
         best_h = None
+        best_score = float("inf")
+
         for h in NG.nodes():
             cpu_cap = NG.nodes[h].get('cpu', 0)
             ram_cap = NG.nodes[h].get('ram', 0)
             if cu[h] + cpu_req <= cpu_cap and ru[h] + ram_req <= ram_cap:
-                best_h = h
-                break
+                # Node power after placing c on h
+                projected_cpu = cu[h] + cpu_req
+                node_cost = node_power_w(projected_cpu, int(cpu_cap or 0), cfg)
+
+                # Communication cost to already placed neighbors (bw * lat * factor)
+                comm_cost = 0.0
+                for _, nb, data in SG.out_edges(c, data=True):
+                    if nb in pl:
+                        nb_h = pl[nb]
+                        lat = sp_len.get(h, {}).get(nb_h, INF_V)
+                        if lat >= INF_V:
+                            comm_cost += 1e9
+                        else:
+                            bw = data.get('bandwidth', 0)
+                            comm_cost += bw * lat * link_factor(float(lat), cfg)
+                for nb, _, data in SG.in_edges(c, data=True):
+                    if nb in pl:
+                        nb_h = pl[nb]
+                        lat = sp_len.get(nb_h, {}).get(h, INF_V)
+                        if lat >= INF_V:
+                            comm_cost += 1e9
+                        else:
+                            bw = data.get('bandwidth', 0)
+                            comm_cost += bw * lat * link_factor(float(lat), cfg)
+
+                # Slight preference to stay near DZ anchors to avoid pathological H0 consolidation.
+                dz_cost = 0.0
+                if dz_hosts:
+                    vals = [sp_len.get(h, {}).get(dh, INF_V) for dh in dz_hosts]
+                    if any(v >= INF_V for v in vals):
+                        dz_cost = 1e6
+                    else:
+                        dz_cost = sum(vals) / max(1, len(vals))
+
+                score = comm_cost + 0.2 * node_cost + 5.0 * dz_cost
+                if score < best_score:
+                    best_score = score
+                    best_h = h
         
         if best_h is not None:
             pl[c] = best_h
@@ -534,7 +597,8 @@ def _generate_seed_placements(network_graph: NetworkGraph,
     # Seed 1: Greedy FFD
     seeds.append(("FFD greedy baseline", _greedy_placement(network_graph, service_graph)))
     
-    # Seed 2: Consolidate on single best host
+    # Seed 2: Consolidate on selected hosts (do not stop at first feasible host)
+    consolidate_candidates = []
     for target_h in NG.nodes():
         pl = dict(dz)
         cu = {h: 0 for h in NG.nodes()}
@@ -558,8 +622,12 @@ def _generate_seed_placements(network_graph: NetworkGraph,
             for c in free:
                 pl[c] = target_h
             if len(pl) == len(SG.nodes()):
-                seeds.append((f"Consolidate on H{target_h}", pl))
-                break
+                sol = _evaluate_solution(pl, network_graph, service_graph, bounds, *w)
+                consolidate_candidates.append((sol.objective_int if sol.feasible else 10**9, target_h, pl))
+
+    consolidate_candidates.sort(key=lambda x: x[0])
+    for _, target_h, pl in consolidate_candidates[:3]:
+        seeds.append((f"Consolidate on H{target_h}", pl))
     
     # Seed 3: DZ-spread (place near DZ hosts)
     if dz:
@@ -611,7 +679,7 @@ def _generate_seed_placements(network_graph: NetworkGraph,
 # =====================================================================
 # OPRO TRAJECTORY & PROMPT BUILDING
 # =====================================================================
-def _build_opro_trajectory(trajectory: List[Tuple[float, Dict[int, int], str]], 
+def _build_opro_trajectory(trajectory: List[Tuple[int, Dict[int, int], str]], 
                            max_shown: int = 20) -> str:
     """Build compact optimization trajectory (worst→best)"""
     if not trajectory:
@@ -651,7 +719,7 @@ def _build_problem_description(network_graph: NetworkGraph,
         cpu = NG.nodes[h].get('cpu', 0)
         ram = NG.nodes[h].get('ram', 0)
         cost = NG.nodes[h].get('cost', cpu)
-        tier = "Cloud" if cpu >= 32 else ("Fog" if cpu >= 8 else "Edge")
+        tier = "gcp-large" if cpu >= 32 else ("gcp-medium" if cpu >= 8 else "gcp-small")
         lines.append(f"  H{h}: CPU={cpu:>3}, RAM={ram:>6}, Cost={cost:>3}, Tier={tier}")
     
     # Application
@@ -678,10 +746,19 @@ def _build_problem_description(network_graph: NetworkGraph,
             ci, hi = dz_data[i], dz_data[i+1]
             lines.append(f"  C{ci} MUST be on H{hi}")
     
-    # Objective weights
-    lines.append(f"\n=== OBJECTIVE WEIGHTS ===")
-    lines.append(f"w_lat={w[0]}, w_cost={w[1]}, w_energy={w[2]}")
-    lines.append(f"Bounds: lat_ub={bounds.lat_ub:.0f}, cost_max={bounds.cost_max:.0f}, energy_ub={bounds.energy_ub:.0f}")
+    # Objective (ENERGY ONLY)
+    lines.append(f"\n=== OBJECTIVE: MINIMIZE ENERGY (Watts) ===")
+    lines.append(f"obj = P_total = P_links + P_nodes")
+    cfg = _load_energy_settings()
+    lines.append(f"\nEnergy model GCP:")
+    lines.append(
+        f"  P_links: bw × sp_latency × factor  (factor: intra-zone={cfg['gcp.factor.intrazone']:.1f}, "
+        f"inter-zone={cfg['gcp.factor.interzone']:.1f}, cross-region={cfg['gcp.factor.crossregion']:.1f})"
+    )
+    lines.append(
+        f"  P_nodes: GCP_PUE × [P_vcpu_idle×cpu_cap + (P_vcpu_active-P_vcpu_idle)×cpu_used]  "
+        f"(PUE={cfg['gcp.pue']:.2f}, P_idle={cfg['gcp.p_vcpu_idle_w']:.1f}W/vCPU, P_active={cfg['gcp.p_vcpu_active_w']:.1f}W/vCPU)"
+    )
     
     return "\n".join(lines)
 
@@ -699,9 +776,9 @@ def _build_opro_prompt(problem_desc: str, trajectory: List, feedback: str,
     
     # Best known
     if best and best.feasible:
-        parts.append(f"\n--- BEAT THIS: score={best.objective_int} "
-                     f"hosts={sorted(best.active_hosts)} "
-                     f"lat={best.total_latency}ms E={best.energy_total} ---")
+        parts.append(f"\n--- BEAT THIS: Energy={best.objective:.2f}W "
+                     f"(P_links={best.energy_link:.2f}W + P_nodes={best.energy_node:.2f}W) "
+                     f"hosts={sorted(best.active_hosts)} ---")
         parts.append(f"Placement: {best.placement}")
     
     # Strategy hint
@@ -848,7 +925,7 @@ class LLMPlacement(PlacementAlgo):
             "NEARBY SPREAD: Place components on NEAREST hosts to DZ hosts.",
             "FIX BOTTLENECK: Colocate endpoints of the worst link.",
             "DZ-CENTRIC: Place near highest-bandwidth DZ hosts.",
-            "ENERGY MINIMIZER: Focus on minimizing E_links (quadratic in distance).",
+            "ENERGY MINIMIZER: Reduce cross-region links first, then inter-zone, then consolidate.",
             "COST REDUCER: Use cheaper hosts while maintaining performance.",
             "CREATIVE: Try a VERY DIFFERENT placement pattern.",
             "MICRO-OPTIMIZE: Test every single-component move systematically.",
@@ -917,7 +994,7 @@ class LLMPlacement(PlacementAlgo):
             except Exception:
                 pass
             
-            # Add to trajectory
+            # Add to trajectory (use objective_int for consistent scoring)
             trajectory.append((
                 sol.objective_int if sol.feasible else 10**9,
                 dict(sol.placement),
@@ -931,11 +1008,11 @@ class LLMPlacement(PlacementAlgo):
                 step_improved = True
                 stale_iterations = 0
                 if self.verbose:
-                    print(f"obj={sol.objective_int} *BEST*")
+                    print(f"Energy={sol.objective:.2f}W *BEST*")
             else:
                 stale_iterations += 1
                 if self.verbose:
-                    print(f"obj={sol.objective_int}")
+                    print(f"Energy={sol.objective:.2f}W")
         
         # Fallback to greedy if no solution
         if best is None:

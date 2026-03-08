@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit on error
 
-## GCP VM Startup Script for Apache Storm
+## GCP VM Startup Script for Apache Storm WORKER NODE
 ## This script runs automatically on VM creation/startup
 ## Logs are visible in: Compute Engine > VM instances > click VM > Logs > Serial port 1
 ## Or via: gcloud compute instances get-serial-port-output INSTANCE_NAME
@@ -11,7 +11,7 @@ exec > >(tee -a /var/log/storm-startup.log)
 exec 2>&1
 
 echo "=========================================="
-echo "Storm Setup Started: $(date)"
+echo "Storm WORKER Setup Started: $(date)"
 echo "=========================================="
 
 # Check if running as root (GCP startup scripts run as root by default)
@@ -45,18 +45,13 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
-apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip vim || {
+apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3.12-venv vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv vim
+    apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
 }
 
-# Install zookeeper separately (can fail on some systems)
-echo "Installing Zookeeper..."
-apt-get install -y -qq zookeeperd || {
-    echo "⚠ Warning: Zookeeper installation failed. Install manually if needed."
-    echo "  This is only required on master nodes."
-}
+# Zookeeper is not needed on worker nodes (only on master)
 
 # Verify Java installation
 java -version
@@ -65,7 +60,7 @@ java -version
 echo "Installing Apache Storm..."
 STORM_VER="2.8.3"
 cd /tmp
-wget -q https://downloads.apache.org/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
+wget -q https://archive.apache.org/dist/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
 tar -zxf apache-storm-$STORM_VER.tar.gz
 mv apache-storm-$STORM_VER /usr/local/storm
 
@@ -112,22 +107,73 @@ else
     echo "✓ Project already exists"
 fi
 
-# --- CONFIGURE STORM ---
-echo "Configuring Storm..."
+# Making all scripts in the project executable (in case permissions were lost during cloning)
+find /home/storm/Energy-aware-computing-continuum -type f -name "*.sh" -exec chmod +x {} \;
 
-# Copy storm.yaml from repo
-if [ -f "/home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml" ]; then
-    cp /home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml /usr/local/storm/conf/storm.yaml
-    chown storm:storm /usr/local/storm/conf/storm.yaml
-    echo "✓ Storm configured (copied from repo)"
-else
-    echo "⚠ Warning: storm.yaml not found in repo at storm-scheduler/conf/storm.yaml"
-    echo "  Storm will use default configuration"
+# --- CONFIGURE STORM FOR WORKER NODE ---
+echo "Configuring Storm for WORKER node..."
+
+# Get nimbus IP from GCP metadata (REQUIRED for worker nodes)
+NIMBUS_IP=$(curl -s -f -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/nimbus-ip" \
+    2>/dev/null)
+
+# Check if metadata fetch succeeded and returned a valid IP
+if [[ -z "$NIMBUS_IP" ]] || [[ "$NIMBUS_IP" == *"<"* ]] || [[ "$NIMBUS_IP" == *"html"* ]]; then
+    echo "Error: nimbus-ip metadata not found or invalid"
+    echo "Worker nodes require the nimbus-ip metadata to be set"
+    echo "Please redeploy with: --metadata nimbus-ip=<master-ip>"
+    exit 1
 fi
+
+echo "Found nimbus-ip metadata: $NIMBUS_IP"
+echo "Generating Storm configuration with Nimbus at $NIMBUS_IP"
+
+# Generate storm.yaml dynamically with worker settings
+cat > /usr/local/storm/conf/storm.yaml << STORM_CONFIG
+storm.zookeeper.servers:
+  - "localhost"
+
+nimbus.seeds: ["$NIMBUS_IP"]
+
+# Ports of Storm supervisor
+supervisor.slots.ports:
+  - 6700
+
+# custom scheduler class
+storm.scheduler: "fr.dvrc.thardy.scheduler.CsvOneToOneScheduler"
+
+# Path to the CSV file for the custom scheduler.
+csv.scheduler.file: "/etc/storm/placement.csv"
+csv.scheduler.hasHeader: true
+
+# Rate that the topology emit a stat
+topology.stats.sample.rate: 1
+
+# Frequency that Nimbus give a sample
+nimbus.monitor.freq.secs: 1
+
+# Frequency that each task emit a sample
+task.heartbeat.frequency.secs: 1
+
+# Frequency that each executor emit a sample
+executor.metrics.frequency.secs: 1
+STORM_CONFIG
+
+chown storm:storm /usr/local/storm/conf/storm.yaml
+echo "✓ Storm configuration generated for WORKER"
+
+# Create STORM_HOME environment variable for current shell, all users, and storm user shell
+export STORM_HOME=/usr/local/storm
+echo 'export STORM_HOME=/usr/local/storm' > /etc/profile.d/storm.sh
+chmod 644 /etc/profile.d/storm.sh
 
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
-chown storm:storm /home/storm/.env
+if ! grep -q '^export STORM_HOME=/usr/local/storm$' /home/storm/.bashrc 2>/dev/null; then
+    echo 'export STORM_HOME=/usr/local/storm' >> /home/storm/.bashrc
+fi
+chown storm:storm /home/storm/.env /home/storm/.bashrc
 
 # Setup python virtual environment for storm user
 sudo -u storm python3 -m venv /home/storm/venv
@@ -141,18 +187,29 @@ mkdir -p /etc/storm
 chmod 755 /etc/storm
 
 echo "=========================================="
-echo "✓ Storm setup complete!"
+echo "✓ Storm WORKER setup complete!"
 echo "  Version: $(storm version | head -1)"
 echo "  Hostname: $(hostname -s)"
+echo "  Nimbus IP: $NIMBUS_IP"
 echo "  Time: $(date)"
 echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
 echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
-echo "  3. Master: ./scripts/start_master.sh"
-echo "     Worker: ./scripts/start_worker.sh"
+echo "  3. Start worker: ./scripts/start_worker.sh"
 echo ""
+
+# Auto-launch Storm worker after setup
+echo "Launching Storm worker..."
+cd /home/storm/Energy-aware-computing-continuum/storm-scheduler
+if [ -x "./scripts/start_worker.sh" ]; then
+    sudo -u storm bash ./scripts/start_worker.sh || echo "Warning: failed to auto-start worker"
+elif [ -x "./start-worker.sh" ]; then
+    sudo -u storm bash ./start-worker.sh || echo "Warning: failed to auto-start worker"
+else
+    echo "Warning: worker start script not found"
+fi
 
 # Mark completion in GCP logs
 echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"

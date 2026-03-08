@@ -1,23 +1,21 @@
-
 from dataclasses import dataclass
 from typing import Dict, Any, List, Set, Tuple
+
 import networkx as nx
 
 from src.placementAlgo import PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
+from src.gcpEnergyModel import _load_energy_settings, link_factor, node_power_w
 
-# Constants from Code_unified_benchmark_vf.py
-P_STATIC = 200
-P_CPU_UNIT = 5
 
 @dataclass
 class EvaluationMetrics:
     """Dataclass to hold evaluation metrics for a placement result.
     Attributes:
-        total_energy: Total energy consumption of the placement (node + link)
-        energy_node: Energy consumed by active hosts based on CPU usage
-        energy_link: Energy consumed by network links based on bandwidth and latency
+        total_energy: Total power proxy (node + link)
+        energy_node: Node power from GCP vCPU-slot model
+        energy_link: Network power proxy from GCP latency-tiered model
         avg_latency: Average latency across all service edges
         worst_latency: Maximum latency among all service edges
         total_latency: Sum of latencies across all service edges
@@ -39,7 +37,7 @@ class EvaluationMetrics:
 
 
 class Evaluator:
-    """Evaluator for placement results, calculating energy and latency metrics based on the infrastructure and application graphs."""
+    """Evaluator for placement results using GCP-aligned energy and latency metrics."""
     
     @staticmethod
     def evaluate(infra: NetworkGraph, app: ServiceGraph, placement: PlacementResult, verbose=False) -> EvaluationMetrics:
@@ -86,12 +84,16 @@ class Evaluator:
             if host_ram_used[h] > host_ram_cap:
                  violations.append(f"Host {h} RAM overflow: {host_ram_used[h]} > {host_ram_cap}")
         
-        # 2. Calculate Node Energy
-        # energy_node = sum(P_STATIC + cu[h] * P_CPU_UNIT for h in active_hosts)
-        energy_node = sum(P_STATIC + host_cpu_used[h] * P_CPU_UNIT for h in active_hosts)
+        cfg = _load_energy_settings()
 
-        # 3. Calculate Link Energy & Latency
-        # energy_link = sum(flow * arc_latency^2) for all physical links used
+        # 2. Calculate Node Energy (GCP model)
+        energy_node = sum(
+            node_power_w(host_cpu_used[h], int(infra.G.nodes[h].get('cpu', 0) or 0), cfg)
+            for h in active_hosts
+        )
+
+        # 3. Calculate Link Energy & Latency (GCP model)
+        # energy_link = sum(flow * arc_latency * factor(tier)) for all physical links used
         energy_link = 0.0
         total_latency = 0.0
         max_latency = 0.0
@@ -136,8 +138,8 @@ class Evaluator:
                         lat = edge_data_infra.get('latency', 0)
                         
                         current_path_latency += lat
-                        # Energy logic: flow * lat^2
-                        energy_link += flow * (lat ** 2)
+                        # GCP network proxy: flow * latency * tier_factor
+                        energy_link += flow * lat * link_factor(lat, cfg)
                     else:
                         violations.append(f"Physical link {n1}->{n2} does not exist for service link {u}->{v}")
             

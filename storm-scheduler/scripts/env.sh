@@ -14,14 +14,13 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 elif [ -f "$HOME/.env" ]; then
     source "$HOME/.env"
 else
-    echo "❌ Error: .env file not found in $PROJECT_ROOT or $HOME"
-    echo "   Please create one containing: STORM_HOME='/path/to/storm'"
-    exit 1
+    echo "⚠️  Warning: .env file not found in $PROJECT_ROOT or $HOME"
+    echo "   if environment variables are not set, please create a .env file with the necessary configurations or set them as environment variables."
 fi
 
-# Check if STORM_HOME is set
+# Check if STORM_HOME is set in .env or as an environment variable
 if [ -z "$STORM_HOME" ]; then
-    echo "❌ Error: STORM_HOME is not set in .env"
+    echo "❌ Error: STORM_HOME is not set as an environment variable."
     exit 1
 fi
 
@@ -35,7 +34,6 @@ fi
 export STORM_HOME
 export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
-export STORM_CONF_DIR="$STORM_HOME/conf"
 export PROJECT_ROOT
 
 # Allow LOG_DIR to be set in .env, otherwise default to project/logs
@@ -49,19 +47,6 @@ fi
 if [ ! -d "$STORM_BIN_DIR" ]; then
     echo "❌ Error: Storm bin directory not found at: $STORM_BIN_DIR"
     exit 1
-fi
-
-if [ -d "$STORM_CONF_DIR" ]; then
-    echo "✅ Storm conf directory found at: $STORM_CONF_DIR"
-    echo "  Copying storm.yaml to the conf directory"
-    if ! cp "$PROJECT_ROOT/conf/storm.yaml" "$STORM_CONF_DIR/storm.yaml"; then
-        echo "❌ Error: Failed to copy $PROJECT_ROOT/conf/storm.yaml to $STORM_CONF_DIR/storm.yaml"
-        echo "   Please check that the source file exists and that you have sufficient permissions."
-        exit 1
-    fi
-else
-    echo "⚠️  Warning: Storm conf directory not found at: $STORM_CONF_DIR"
-    echo "   Please ensure Apache Storm is installed correctly and update the path in your .env file if needed."
 fi
 
 # Note: Log directory creation is handled by individual scripts (start_master.sh, start_worker.sh)
