@@ -24,7 +24,12 @@ fi
 # launch python algo placement
 echo "===================== Running python placement algorithm ... ===================="
 # venv activation
-source "$PROJECT_ROOT/venv/bin/activate"
+if [ -f "~/venv/bin/activate" ]; then
+    source "~/venv/bin/activate"
+else
+    echo "⚠️  Python virtual environment not found at ~/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
+    exit 1
+fi
 # run the placement algorithm
 python "$PROJECT_ROOT/python_algo/main.py" --infra "$1" --app "$2" --to-csv "$PROJECT_ROOT/result/placement.csv"
 if [ $? -ne 0 ]; then
