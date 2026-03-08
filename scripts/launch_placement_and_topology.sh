@@ -27,8 +27,7 @@ echo "===================== Running python placement algorithm ... =============
 if [ -f "~/venv/bin/activate" ]; then
     source "~/venv/bin/activate"
 else
-    echo "⚠️  Python virtual environment not found at ~/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
-    exit 1
+    echo "⚠️  Warning : Python virtual environment not found at ~/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
 # run the placement algorithm
 python "$PROJECT_ROOT/python_algo/main.py" --infra "$1" --app "$2" --to-csv "$PROJECT_ROOT/result/placement.csv"
