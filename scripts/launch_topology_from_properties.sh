@@ -4,9 +4,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of scripts directory)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STORM_SCHEDULER_DIR="$PROJECT_ROOT/storm-scheduler"
 
-# Change to project root
-cd "$PROJECT_ROOT"
+# Change to storm-scheduler module
+cd "$STORM_SCHEDULER_DIR"
 
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
@@ -17,8 +18,8 @@ if [ $# -lt 1 ]; then
     echo "Usage: $0 <properties_file> [topology_name]"
     echo ""
     echo "Example:"
-    echo "  $0 ../python_algo/properties/Appli_4comps.properties MyTopology"
-    echo "  $0 ../python_algo/properties/Appli_10comps_dcns.properties DCNS"
+    echo "  $0 $PROJECT_ROOT/python_algo/properties/Appli_4comps.properties MyTopology"
+    echo "  $0 $PROJECT_ROOT/python_algo/properties/Appli_10comps_dcns.properties DCNS"
     exit 1
 fi
 

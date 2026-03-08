@@ -4,12 +4,13 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of scripts directory)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STORM_SCHEDULER_DIR="$PROJECT_ROOT/storm-scheduler"
 
 # Change to project root
 cd "$PROJECT_ROOT"
 
-CONF_ROOT="$PROJECT_ROOT/conf"
-LOG_DIR="$PROJECT_ROOT/logs"
+CONF_ROOT="$STORM_SCHEDULER_DIR/conf"
+LOG_DIR="$STORM_SCHEDULER_DIR/logs"
 
 # Create a logs directory if it doesn't exist
 mkdir -p "$LOG_DIR"

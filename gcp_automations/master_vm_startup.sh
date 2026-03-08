@@ -185,13 +185,13 @@ echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
-echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
+echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum"
 echo "  3. Start master: ./scripts/start_master.sh"
 echo ""
 
 # Auto-launch Storm master services after setup
 echo "Launching Storm master services..."
-cd /home/storm/Energy-aware-computing-continuum/storm-scheduler
+cd /home/storm/Energy-aware-computing-continuum
 if [ -x "./scripts/start_master.sh" ]; then
     sudo -u storm bash ./scripts/start_master.sh || echo "Warning: failed to auto-start master services"
 elif [ -x "./start-master.sh" ]; then

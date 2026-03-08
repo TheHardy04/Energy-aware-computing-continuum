@@ -189,13 +189,13 @@ echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
-echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
+echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum"
 echo "  3. Start worker: ./scripts/start_worker.sh"
 echo ""
 
 # Auto-launch Storm worker after setup
 echo "Launching Storm worker..."
-cd /home/storm/Energy-aware-computing-continuum/storm-scheduler
+cd /home/storm/Energy-aware-computing-continuum
 if [ -x "./scripts/start_worker.sh" ]; then
     sudo -u storm bash ./scripts/start_worker.sh || echo "Warning: failed to auto-start worker"
 elif [ -x "./start-worker.sh" ]; then

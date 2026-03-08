@@ -4,9 +4,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of scripts directory)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STORM_SCHEDULER_DIR="$PROJECT_ROOT/storm-scheduler"
 
-# Change to project root
-cd "$PROJECT_ROOT"
+# Change to storm-scheduler module
+cd "$STORM_SCHEDULER_DIR"
 
 ## Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT-all.jar"
