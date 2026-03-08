@@ -107,12 +107,7 @@ else
     echo "✓ Project already exists"
 fi
 
-# --- CONFIGURE STORM ---
-echo "Configuring Storm..."
-
-# Get nimbus IP from GCP metadata (fallback to localhost if not set)
-NIMBUS_IP=$(curl -s -f -H "Metadata-Flavor: Google" \
-    "http://metadata.gFOR WORKER NODE ---
+# --- CONFIGURE STORM FOR WORKER NODE ---
 echo "Configuring Storm for WORKER node..."
 
 # Get nimbus IP from GCP metadata (REQUIRED for worker nodes)
@@ -122,13 +117,18 @@ NIMBUS_IP=$(curl -s -f -H "Metadata-Flavor: Google" \
 
 # Check if metadata fetch succeeded and returned a valid IP
 if [[ -z "$NIMBUS_IP" ]] || [[ "$NIMBUS_IP" == *"<"* ]] || [[ "$NIMBUS_IP" == *"html"* ]]; then
-    echo "❌ ERROR: nimbus-ip metadata not found or invalid!"
-    echo "   Worker nodes require the nimbus-ip metadata to be set."
-    echo "   Please redeploy with: --metadata nimbus-ip=<master-ip>"
+    echo "Error: nimbus-ip metadata not found or invalid"
+    echo "Worker nodes require the nimbus-ip metadata to be set"
+    echo "Please redeploy with: --metadata nimbus-ip=<master-ip>"
     exit 1
 fi
 
-echo "Found nimbus-ip metadata: $NIMBUS_IP"storm.zookeeper.servers:
+echo "Found nimbus-ip metadata: $NIMBUS_IP"
+echo "Generating Storm configuration with Nimbus at $NIMBUS_IP"
+
+# Generate storm.yaml dynamically with worker settings
+cat > /usr/local/storm/conf/storm.yaml << STORM_CONFIG
+storm.zookeeper.servers:
   - "localhost"
 
 nimbus.seeds: ["$NIMBUS_IP"]
@@ -158,11 +158,19 @@ executor.metrics.frequency.secs: 1
 STORM_CONFIG
 
 chown storm:storm /usr/local/storm/conf/storm.yaml
-echo "✓ Storm configuration generated"
+echo "✓ Storm configuration generated for WORKER"
+
+# Create STORM_HOME environment variable for current shell, all users, and storm user shell
+export STORM_HOME=/usr/local/storm
+echo 'export STORM_HOME=/usr/local/storm' > /etc/profile.d/storm.sh
+chmod 644 /etc/profile.d/storm.sh
 
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
-chown storm:storm /home/storm/.env for WORKER
+if ! grep -q '^export STORM_HOME=/usr/local/storm$' /home/storm/.bashrc 2>/dev/null; then
+    echo 'export STORM_HOME=/usr/local/storm' >> /home/storm/.bashrc
+fi
+chown storm:storm /home/storm/.env /home/storm/.bashrc
 
 # Setup python virtual environment for storm user
 sudo -u storm python3 -m venv /home/storm/venv
@@ -175,7 +183,8 @@ pip install -r /home/storm/Energy-aware-computing-continuum/python_algo/requirem
 mkdir -p /etc/storm
 chmod 755 /etc/storm
 
-echo "========WORKER setup complete!"
+echo "=========================================="
+echo "✓ Storm WORKER setup complete!"
 echo "  Version: $(storm version | head -1)"
 echo "  Hostname: $(hostname -s)"
 echo "  Nimbus IP: $NIMBUS_IP"
@@ -185,8 +194,7 @@ echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
 echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
-echo "  3. Start waster: ./scripts/start_master.sh"
-echo "     Worker: ./scripts/start_worker.sh"
+echo "  3. Start worker: ./scripts/start_worker.sh"
 echo ""
 
 # Mark completion in GCP logs

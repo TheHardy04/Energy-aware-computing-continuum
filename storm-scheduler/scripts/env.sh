@@ -14,14 +14,13 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 elif [ -f "$HOME/.env" ]; then
     source "$HOME/.env"
 else
-    echo "❌ Error: .env file not found in $PROJECT_ROOT or $HOME"
-    echo "   Please create one containing: STORM_HOME='/path/to/storm'"
-    exit 1
+    echo "⚠️  Warning: .env file not found in $PROJECT_ROOT or $HOME"
+    echo "   if environment variables are not set, please create a .env file with the necessary configurations or set them as environment variables."
 fi
 
-# Check if STORM_HOME is set
+# Check if STORM_HOME is set in .env or as an environment variable
 if [ -z "$STORM_HOME" ]; then
-    echo "❌ Error: STORM_HOME is not set in .env"
+    echo "❌ Error: STORM_HOME is not set as an environment variable."
     exit 1
 fi
 

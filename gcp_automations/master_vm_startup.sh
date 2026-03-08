@@ -150,9 +150,17 @@ STORM_CONFIG
 chown storm:storm /usr/local/storm/conf/storm.yaml
 echo "✓ Storm configuration generated for MASTER"
 
+# Create STORM_HOME environment variable for current shell, all users, and storm user shell
+export STORM_HOME=/usr/local/storm
+echo 'export STORM_HOME=/usr/local/storm' > /etc/profile.d/storm.sh
+chmod 644 /etc/profile.d/storm.sh
+
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
-chown storm:storm /home/storm/.env
+if ! grep -q '^export STORM_HOME=/usr/local/storm$' /home/storm/.bashrc 2>/dev/null; then
+    echo 'export STORM_HOME=/usr/local/storm' >> /home/storm/.bashrc
+fi
+chown storm:storm /home/storm/.env /home/storm/.bashrc
 
 # Setup python virtual environment for storm user
 sudo -u storm python3 -m venv /home/storm/venv
