@@ -1,4 +1,5 @@
 #!/bin/bash
+# Script to launch a topology from a properties file. The properties file should contain all the necessary configuration for the topology, including component definitions, parallelism, and any other relevant settings.
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
