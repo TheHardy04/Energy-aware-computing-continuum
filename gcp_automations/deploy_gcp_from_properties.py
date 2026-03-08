@@ -7,7 +7,8 @@ import time
 
 # --- CONFIGURATION ---
 ZONE = "europe-west9-a" 
-STARTUP_SCRIPT = r"gcp_automations\vm_startup.sh"
+MASTER_STARTUP_SCRIPT = r"gcp_automations\master_vm_startup.sh"
+WORKER_STARTUP_SCRIPT = r"gcp_automations\vm_startup.sh"
 
 MASTER_NAME = "storm-nimbus"
 MASTER_TYPE = "e2-medium" 
@@ -128,7 +129,7 @@ def main():
             f"--image-family=ubuntu-minimal-2404-lts-amd64 "
             f"--image-project=ubuntu-os-cloud "
             f"--provisioning-model=SPOT "
-            f"--metadata-from-file startup-script={STARTUP_SCRIPT} "
+            f"--metadata-from-file startup-script={MASTER_STARTUP_SCRIPT} "
             f"--tags=storm-node"
         )
         run_gcloud(cmd_master)
@@ -169,7 +170,7 @@ def main():
                 f"--image-family=ubuntu-minimal-2404-lts-amd64 "
                 f"--image-project=ubuntu-os-cloud "
                 f"--provisioning-model=SPOT "
-                f"--metadata-from-file startup-script={STARTUP_SCRIPT} "
+                f"--metadata-from-file startup-script={WORKER_STARTUP_SCRIPT} "
                 f"--metadata nimbus-ip={nimbus_ip} "
                 f"--tags=storm-node"
             )

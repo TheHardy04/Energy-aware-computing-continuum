@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # Exit on error
 
-## GCP VM Startup Script for Apache Storm WORKER NODE
+## GCP VM Startup Script for Apache Storm MASTER NODE
 ## This script runs automatically on VM creation/startup
 ## Logs are visible in: Compute Engine > VM instances > click VM > Logs > Serial port 1
 ## Or via: gcloud compute instances get-serial-port-output INSTANCE_NAME
@@ -11,7 +11,7 @@ exec > >(tee -a /var/log/storm-startup.log)
 exec 2>&1
 
 echo "=========================================="
-echo "Storm WORKER Setup Started: $(date)"
+echo "Storm MASTER Setup Started: $(date)"
 echo "=========================================="
 
 # Check if running as root (GCP startup scripts run as root by default)
@@ -51,7 +51,12 @@ apt-get install -y -qq openjdk-17-jdk-headless wget python3 tar git maven python
     apt-get install -y openjdk-17-jdk-headless wget python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
 }
 
-# Zookeeper is not needed on worker nodes (only on master)
+# Install zookeeper (required on master)
+echo "Installing Zookeeper..."
+apt-get install -y -qq zookeeperd || {
+    echo "⚠ Warning: Zookeeper installation failed. Install manually if needed."
+    echo "  Zookeeper is REQUIRED on master nodes."
+}
 
 # Verify Java installation
 java -version
@@ -97,7 +102,7 @@ ln -sf /usr/local/storm/bin/storm /usr/bin/storm
 # Cleanup
 rm -f /tmp/apache-storm-$STORM_VER.tar.gz
 
-# Clone project to storm user's home first (needed for storm.yaml)
+# Clone project to storm user's home
 echo "Cloning project repository..."
 if [ ! -d "/home/storm/Energy-aware-computing-continuum" ]; then
     sudo -u storm git clone https://github.com/TheHardy04/Energy-aware-computing-continuum.git /home/storm/Energy-aware-computing-continuum
@@ -107,31 +112,16 @@ else
     echo "✓ Project already exists"
 fi
 
-# --- CONFIGURE STORM ---
-echo "Configuring Storm..."
+# --- CONFIGURE STORM FOR MASTER NODE ---
+echo "Configuring Storm for MASTER node..."
+echo "Generating Storm configuration with Nimbus at localhost (this is the master)"
 
-# Get nimbus IP from GCP metadata (fallback to localhost if not set)
-NIMBUS_IP=$(curl -s -f -H "Metadata-Flavor: Google" \
-    "http://metadata.gFOR WORKER NODE ---
-echo "Configuring Storm for WORKER node..."
-
-# Get nimbus IP from GCP metadata (REQUIRED for worker nodes)
-NIMBUS_IP=$(curl -s -f -H "Metadata-Flavor: Google" \
-    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/nimbus-ip" \
-    2>/dev/null)
-
-# Check if metadata fetch succeeded and returned a valid IP
-if [[ -z "$NIMBUS_IP" ]] || [[ "$NIMBUS_IP" == *"<"* ]] || [[ "$NIMBUS_IP" == *"html"* ]]; then
-    echo "❌ ERROR: nimbus-ip metadata not found or invalid!"
-    echo "   Worker nodes require the nimbus-ip metadata to be set."
-    echo "   Please redeploy with: --metadata nimbus-ip=<master-ip>"
-    exit 1
-fi
-
-echo "Found nimbus-ip metadata: $NIMBUS_IP"storm.zookeeper.servers:
+# Generate storm.yaml for master node (nimbus points to localhost)
+cat > /usr/local/storm/conf/storm.yaml << 'STORM_CONFIG'
+storm.zookeeper.servers:
   - "localhost"
 
-nimbus.seeds: ["$NIMBUS_IP"]
+nimbus.seeds: ["localhost"]
 
 # Ports of Storm supervisor
 supervisor.slots.ports:
@@ -158,11 +148,11 @@ executor.metrics.frequency.secs: 1
 STORM_CONFIG
 
 chown storm:storm /usr/local/storm/conf/storm.yaml
-echo "✓ Storm configuration generated"
+echo "✓ Storm configuration generated for MASTER"
 
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
-chown storm:storm /home/storm/.env for WORKER
+chown storm:storm /home/storm/.env
 
 # Setup python virtual environment for storm user
 sudo -u storm python3 -m venv /home/storm/venv
@@ -175,18 +165,17 @@ pip install -r /home/storm/Energy-aware-computing-continuum/python_algo/requirem
 mkdir -p /etc/storm
 chmod 755 /etc/storm
 
-echo "========WORKER setup complete!"
+echo "=========================================="
+echo "✓ Storm MASTER setup complete!"
 echo "  Version: $(storm version | head -1)"
 echo "  Hostname: $(hostname -s)"
-echo "  Nimbus IP: $NIMBUS_IP"
 echo "  Time: $(date)"
 echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
 echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
-echo "  3. Start waster: ./scripts/start_master.sh"
-echo "     Worker: ./scripts/start_worker.sh"
+echo "  3. Start master: ./scripts/start_master.sh"
 echo ""
 
 # Mark completion in GCP logs
