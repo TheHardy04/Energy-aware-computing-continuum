@@ -115,15 +115,49 @@ fi
 # --- CONFIGURE STORM ---
 echo "Configuring Storm..."
 
-# Copy storm.yaml from repo
-if [ -f "/home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml" ]; then
-    cp /home/storm/Energy-aware-computing-continuum/storm-scheduler/conf/storm.yaml /usr/local/storm/conf/storm.yaml
-    chown storm:storm /usr/local/storm/conf/storm.yaml
-    echo "✓ Storm configured (copied from repo)"
-else
-    echo "⚠ Warning: storm.yaml not found in repo at storm-scheduler/conf/storm.yaml"
-    echo "  Storm will use default configuration"
-fi
+# Get nimbus IP from GCP metadata (fallback to localhost if not set)
+NIMBUS_IP=$(curl -s -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/nimbus-ip" \
+    2>/dev/null || echo "localhost")
+
+echo "Generating Storm configuration with Nimbus at $NIMBUS_IP"
+
+# Generate storm.yaml dynamically
+cat > /usr/local/storm/conf/storm.yaml << 'STORM_CONFIG'
+storm.zookeeper.servers:
+  - "localhost"
+
+nimbus.seeds: ["NIMBUS_IP_PLACEHOLDER"]
+
+# Ports of Storm supervisor
+supervisor.slots.ports:
+  - 6700
+
+# custom scheduler class
+storm.scheduler: "fr.dvrc.thardy.scheduler.CsvOneToOneScheduler"
+
+# Path to the CSV file for the custom scheduler.
+csv.scheduler.file: "/etc/storm/placement.csv"
+csv.scheduler.hasHeader: true
+
+# Rate that the topology emit a stat
+topology.stats.sample.rate: 1
+
+# Frequency that Nimbus give a sample
+nimbus.monitor.freq.secs: 1
+
+# Frequency that each task emit a sample
+task.heartbeat.frequency.secs: 1
+
+# Frequency that each executor emit a sample
+executor.metrics.frequency.secs: 1
+STORM_CONFIG
+
+# Replace placeholder with actual nimbus IP
+sed -i "s/NIMBUS_IP_PLACEHOLDER/$NIMBUS_IP/g" /usr/local/storm/conf/storm.yaml
+
+chown storm:storm /usr/local/storm/conf/storm.yaml
+echo "✓ Storm configuration generated"
 
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
