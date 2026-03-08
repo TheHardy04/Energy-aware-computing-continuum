@@ -110,29 +110,39 @@ public class CsvOneToOneScheduler implements IScheduler {
                         execsForHost.size(), sup.getHost(), chosen.getPort());
             }
 
-            // 3) Fallback: pack remaining components into already-created workers (do NOT create more workers)
+            // 3) Fallback: pack remaining components into available slots
+            // Each slot can only hold one assignment, so ensure we don't re-assign to used slots
             if (!needs.isEmpty()) {
-                List<WorkerSlot> slotList = new ArrayList<>(usedSlots);
-
-                // If nothing was assigned yet, fallback to any free slots (not ideal, but prevents stalling)
-                if (slotList.isEmpty()) {
-                    slotList = new ArrayList<>(cluster.getAvailableSlots());
+                // Get all available slots from cluster, excluding those already assigned in step 2
+                List<WorkerSlot> availableSlots = new ArrayList<>();
+                for (WorkerSlot slot : cluster.getAvailableSlots()) {
+                    if (!usedSlots.contains(slot)) {
+                        availableSlots.add(slot);
+                    }
                 }
 
-                int idx = 0;
+                // If nothing was assigned yet, also consider existing assignment slots
+                if (availableSlots.isEmpty() && !usedSlots.isEmpty()) {
+                    LOG.warn("No more free slots available. {} components may remain unscheduled.", needs.size());
+                }
+
+                int slotIdx = 0;
                 for (Map.Entry<String, List<ExecutorDetails>> rem : needs.entrySet()) {
-                    if (slotList.isEmpty()) {
-                        LOG.warn("No slots available for remaining components: {}", needs.keySet());
+                    if (availableSlots.isEmpty()) {
+                        LOG.warn("No slots available for component '{}'. Remaining: {}",
+                                rem.getKey(), needs.keySet());
                         break;
                     }
 
-                    WorkerSlot target = slotList.get(idx % slotList.size());
+                    WorkerSlot target = availableSlots.get(slotIdx % availableSlots.size());
                     cluster.assign(target, topology.getId(), rem.getValue());
+                    usedSlots.add(target);
+                    availableSlots.remove(slotIdx % availableSlots.size());
 
-                    LOG.info("Fallback packed component '{}' into existing worker nodeId={} port={}",
+                    LOG.info("Fallback packed component '{}' into available worker nodeId={} port={}",
                             rem.getKey(), target.getNodeId(), target.getPort());
 
-                    idx++;
+                    slotIdx++;
                 }
             }
         }
