@@ -1,98 +1,13 @@
 from dataclasses import dataclass
 from typing import Dict, Any, List, Set, Tuple
-import os
+
 import networkx as nx
 
 from src.placementAlgo import PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
+from src.gcpEnergyModel import _load_energy_settings, link_factor, node_power_w
 
-# GCP energy model defaults 
-GCP_PUE = 1.10
-GCP_P_VCPU_IDLE_W = 1.0
-GCP_P_VCPU_ACTIVE_W = 8.0
-
-GCP_LAT_INTRAZONE_MS = 2.0
-GCP_LAT_INTERZONE_MS = 25.0
-
-GCP_FACTOR_INTRAZONE = 1.0
-GCP_FACTOR_INTERZONE = 1.5
-GCP_FACTOR_CROSSREGION = 2.0
-
-
-def _parse_simple_properties(file_path: str) -> Dict[str, str]:
-    """Minimal .properties parser (key=value) used for energy tunables."""
-    props: Dict[str, str] = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        continuation = ""
-        for raw in f:
-            line = raw.rstrip("\n")
-            if line.endswith("\\"):
-                continuation += line[:-1]
-                continue
-            line = (continuation + line).strip()
-            continuation = ""
-            if not line or line[0] in "#!":
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-            elif ":" in line:
-                k, v = line.split(":", 1)
-            else:
-                continue
-            props[k.strip()] = v.strip()
-    return props
-
-
-def _load_energy_settings() -> Dict[str, float]:
-    """Load energy model settings from properties, with GCP defaults fallback."""
-    default_path = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")
-    )
-    config_path = os.environ.get("CSP_ENERGY_PROPERTIES", "") or default_path
-
-    settings = {
-        "gcp.pue": GCP_PUE,
-        "gcp.p_vcpu_idle_w": GCP_P_VCPU_IDLE_W,
-        "gcp.p_vcpu_active_w": GCP_P_VCPU_ACTIVE_W,
-        "gcp.lat.intrazone_ms": GCP_LAT_INTRAZONE_MS,
-        "gcp.lat.interzone_ms": GCP_LAT_INTERZONE_MS,
-        "gcp.factor.intrazone": GCP_FACTOR_INTRAZONE,
-        "gcp.factor.interzone": GCP_FACTOR_INTERZONE,
-        "gcp.factor.crossregion": GCP_FACTOR_CROSSREGION,
-    }
-
-    if os.path.exists(config_path):
-        try:
-            raw = _parse_simple_properties(config_path)
-            for key in list(settings.keys()):
-                if key in raw:
-                    settings[key] = float(raw[key])
-        except Exception:
-            # Keep defaults if the settings file is malformed.
-            pass
-
-    return settings
-
-
-def _link_factor(latency_ms: float, cfg: Dict[str, float]) -> float:
-    """Infer GCP network tier factor from measured latency."""
-    if latency_ms <= cfg["gcp.lat.intrazone_ms"]:
-        return cfg["gcp.factor.intrazone"]
-    if latency_ms <= cfg["gcp.lat.interzone_ms"]:
-        return cfg["gcp.factor.interzone"]
-    return cfg["gcp.factor.crossregion"]
-
-
-def _node_power_w(cpu_used: int, cpu_cap: int, cfg: Dict[str, float]) -> float:
-    """GCP vCPU-slot node power model with explicit zero for inactive VMs."""
-    if cpu_cap <= 0 or cpu_used <= 0:
-        return 0.0
-    used = min(cpu_used, cpu_cap)
-    return cfg["gcp.pue"] * (
-        cfg["gcp.p_vcpu_idle_w"] * cpu_cap
-        + (cfg["gcp.p_vcpu_active_w"] - cfg["gcp.p_vcpu_idle_w"]) * used
-    )
 
 @dataclass
 class EvaluationMetrics:
@@ -173,7 +88,7 @@ class Evaluator:
 
         # 2. Calculate Node Energy (GCP model)
         energy_node = sum(
-            _node_power_w(host_cpu_used[h], int(infra.G.nodes[h].get('cpu', 0) or 0), cfg)
+            node_power_w(host_cpu_used[h], int(infra.G.nodes[h].get('cpu', 0) or 0), cfg)
             for h in active_hosts
         )
 
@@ -224,7 +139,7 @@ class Evaluator:
                         
                         current_path_latency += lat
                         # GCP network proxy: flow * latency * tier_factor
-                        energy_link += flow * lat * _link_factor(lat, cfg)
+                        energy_link += flow * lat * link_factor(lat, cfg)
                     else:
                         violations.append(f"Physical link {n1}->{n2} does not exist for service link {u}->{v}")
             

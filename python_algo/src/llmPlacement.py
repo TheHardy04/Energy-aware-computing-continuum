@@ -8,13 +8,13 @@ import urllib.error
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from functools import lru_cache
 
 import networkx as nx
 
 from src.placementAlgo import PlacementAlgo, PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
+from src.gcpEnergyModel import _load_energy_settings, link_factor, node_power_w
 
 # =====================================================================
 # CONSTANTS
@@ -22,93 +22,6 @@ from src.serviceGraph import ServiceGraph
 NORM = 10000
 INF_V = 10 ** 9
 P_CPU_LOCAL = float(os.environ.get("P_CPU_WATTS", "45"))  # Watts
-
-# GCP energy model defaults (aligned with Code_unified_benchmark_energy_gcp.py)
-GCP_PUE = 1.10
-GCP_P_VCPU_IDLE_W = 1.0
-GCP_P_VCPU_ACTIVE_W = 8.0
-
-GCP_LAT_INTRAZONE_MS = 2.0
-GCP_LAT_INTERZONE_MS = 25.0
-
-GCP_FACTOR_INTRAZONE = 1.0
-GCP_FACTOR_INTERZONE = 1.5
-GCP_FACTOR_CROSSREGION = 2.0
-
-
-def _parse_simple_properties(file_path: str) -> Dict[str, str]:
-    """Minimal .properties parser (key=value), compatible with project files."""
-    props: Dict[str, str] = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        continuation = ""
-        for raw in f:
-            line = raw.rstrip("\n")
-            if line.endswith("\\"):
-                continuation += line[:-1]
-                continue
-            line = (continuation + line).strip()
-            continuation = ""
-            if not line or line[0] in "#!":
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-            elif ":" in line:
-                k, v = line.split(":", 1)
-            else:
-                continue
-            props[k.strip()] = v.strip()
-    return props
-
-
-@lru_cache(maxsize=1)
-def _load_energy_settings() -> Dict[str, float]:
-    """Load GCP energy constants from Energy_GCP.properties with safe defaults."""
-    default_path = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")
-    )
-    config_path = os.environ.get("CSP_ENERGY_PROPERTIES", "") or default_path
-
-    settings = {
-        "gcp.pue": GCP_PUE,
-        "gcp.p_vcpu_idle_w": GCP_P_VCPU_IDLE_W,
-        "gcp.p_vcpu_active_w": GCP_P_VCPU_ACTIVE_W,
-        "gcp.lat.intrazone_ms": GCP_LAT_INTRAZONE_MS,
-        "gcp.lat.interzone_ms": GCP_LAT_INTERZONE_MS,
-        "gcp.factor.intrazone": GCP_FACTOR_INTRAZONE,
-        "gcp.factor.interzone": GCP_FACTOR_INTERZONE,
-        "gcp.factor.crossregion": GCP_FACTOR_CROSSREGION,
-    }
-
-    if os.path.exists(config_path):
-        try:
-            raw = _parse_simple_properties(config_path)
-            for key in list(settings.keys()):
-                if key in raw:
-                    settings[key] = float(raw[key])
-        except Exception:
-            pass
-
-    return settings
-
-
-def _link_factor(latency_ms: float, cfg: Dict[str, float]) -> float:
-    """Infer GCP link factor from measured latency tier."""
-    if latency_ms <= cfg["gcp.lat.intrazone_ms"]:
-        return cfg["gcp.factor.intrazone"]
-    if latency_ms <= cfg["gcp.lat.interzone_ms"]:
-        return cfg["gcp.factor.interzone"]
-    return cfg["gcp.factor.crossregion"]
-
-
-def _node_power_w(cpu_used: int, cpu_cap: int, cfg: Dict[str, float]) -> float:
-    """GCP vCPU-slot node model with explicit zero for inactive hosts."""
-    if cpu_cap <= 0 or cpu_used <= 0:
-        return 0.0
-    used = min(cpu_used, cpu_cap)
-    return cfg["gcp.pue"] * (
-        cfg["gcp.p_vcpu_idle_w"] * cpu_cap
-        + (cfg["gcp.p_vcpu_active_w"] - cfg["gcp.p_vcpu_idle_w"]) * used
-    )
 
 # Energy per 1k tokens (Wh) - source: Luccioni et al. 2023
 ENERGY_PER_1K_TOKENS = {
@@ -529,11 +442,11 @@ def _evaluate_solution(placement: Dict[int, int],
     
     # Energy (GCP model)
     sol.energy_link = sum(
-        fl * NG.edges[u, v].get('latency', 0) * _link_factor(float(NG.edges[u, v].get('latency', 0)), cfg)
+        fl * NG.edges[u, v].get('latency', 0) * link_factor(float(NG.edges[u, v].get('latency', 0)), cfg)
         for (u, v), fl in arc_flow.items()
     )
     sol.energy_node = sum(
-        _node_power_w(cu[h], int(NG.nodes[h].get('cpu', 0) or 0), cfg)
+        node_power_w(cu[h], int(NG.nodes[h].get('cpu', 0) or 0), cfg)
         for h in sol.active_hosts
     )
     sol.energy_total = sol.energy_link + sol.energy_node
@@ -606,7 +519,7 @@ def _greedy_placement(network_graph: NetworkGraph,
             if cu[h] + cpu_req <= cpu_cap and ru[h] + ram_req <= ram_cap:
                 # Node power after placing c on h
                 projected_cpu = cu[h] + cpu_req
-                node_cost = _node_power_w(projected_cpu, int(cpu_cap or 0), cfg)
+                node_cost = node_power_w(projected_cpu, int(cpu_cap or 0), cfg)
 
                 # Communication cost to already placed neighbors (bw * lat * factor)
                 comm_cost = 0.0
@@ -618,7 +531,7 @@ def _greedy_placement(network_graph: NetworkGraph,
                             comm_cost += 1e9
                         else:
                             bw = data.get('bandwidth', 0)
-                            comm_cost += bw * lat * _link_factor(float(lat), cfg)
+                            comm_cost += bw * lat * link_factor(float(lat), cfg)
                 for nb, _, data in SG.in_edges(c, data=True):
                     if nb in pl:
                         nb_h = pl[nb]
@@ -627,7 +540,7 @@ def _greedy_placement(network_graph: NetworkGraph,
                             comm_cost += 1e9
                         else:
                             bw = data.get('bandwidth', 0)
-                            comm_cost += bw * lat * _link_factor(float(lat), cfg)
+                            comm_cost += bw * lat * link_factor(float(lat), cfg)
 
                 # Slight preference to stay near DZ anchors to avoid pathological H0 consolidation.
                 dz_cost = 0.0
@@ -766,25 +679,25 @@ def _generate_seed_placements(network_graph: NetworkGraph,
 # =====================================================================
 # OPRO TRAJECTORY & PROMPT BUILDING
 # =====================================================================
-def _build_opro_trajectory(trajectory: List[Tuple[float, Dict[int, int], str]], 
+def _build_opro_trajectory(trajectory: List[Tuple[int, Dict[int, int], str]], 
                            max_shown: int = 20) -> str:
     """Build compact optimization trajectory (worst→best)"""
     if not trajectory:
-        return "\n=== NO TRAJECTORY YET ==="
+        return ""
     
     # Keep best N, sort worst→best
     shown = sorted(trajectory, key=lambda x: -x[0])[-max_shown:]
     shown.sort(key=lambda x: x[0], reverse=True)
     
-    lines = ["\n=== TRAJECTORY (worst→best, LOWER ENERGY=BETTER) ==="]
+    lines = ["\n=== TRAJECTORY (worst→best, LOWER=BETTER) ==="]
     for i, (score, pl, reasoning) in enumerate(shown):
         active = len(set(pl.values()))
         pl_compact = ",".join(f"{c}:{h}" for c, h in sorted(pl.items()))
         insight = f" | {reasoning[:80]}" if reasoning else ""
-        lines.append(f"  #{i+1} Energy={score:.2f}W hosts={active} [{pl_compact}]{insight}")
+        lines.append(f"  #{i+1} score={score} hosts={active} [{pl_compact}]{insight}")
     
     best_score = shown[-1][0] if shown else float("inf")
-    lines.append(f"\nBEST ENERGY={best_score:.2f}W. Generate NEW placement with LOWER energy.")
+    lines.append(f"\nBEST={best_score}. Generate NEW placement with score < {best_score}.")
     return "\n".join(lines)
 
 
@@ -994,14 +907,14 @@ class LLMPlacement(PlacementAlgo):
         for name, pl in seeds:
             sol = _evaluate_solution(pl, network_graph, service_graph, bounds, *w)
             trajectory.append((
-                sol.objective if sol.feasible else float('inf'),
+                sol.objective_int if sol.feasible else 10**9,
                 dict(sol.placement),
                 name
             ))
             if sol.feasible and (best is None or sol.objective < best.objective):
                 best = sol
                 if self.verbose:
-                    print(f"      {name}: Energy={sol.objective:.2f}W *BEST*")
+                    print(f"      {name}: obj={sol.objective_int} *BEST*")
         
         # Phase 2: Build problem description
         problem_desc = _build_problem_description(network_graph, service_graph, bounds, w)
@@ -1081,9 +994,9 @@ class LLMPlacement(PlacementAlgo):
             except Exception:
                 pass
             
-            # Add to trajectory (use raw energy for sorting/display)
+            # Add to trajectory (use objective_int for consistent scoring)
             trajectory.append((
-                sol.objective if sol.feasible else float('inf'),
+                sol.objective_int if sol.feasible else 10**9,
                 dict(sol.placement),
                 reasoning or f"LLM iter {it}"
             ))

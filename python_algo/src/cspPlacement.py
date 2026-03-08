@@ -8,95 +8,7 @@ from src.placementAlgo import PlacementAlgo, PlacementResult
 from src.networkGraph import NetworkGraph
 from src.serviceGraph import ServiceGraph
 from src.utils import edge_ressources_snapshot, edge_capacity_ok, allocate_on_edges
-
-
-# GCP energy model defaults 
-GCP_PUE = 1.10
-GCP_P_VCPU_IDLE_W = 1.0
-GCP_P_VCPU_ACTIVE_W = 8.0
-
-GCP_LAT_INTRAZONE_MS = 2.0
-GCP_LAT_INTERZONE_MS = 25.0
-
-GCP_FACTOR_INTRAZONE = 1.0
-GCP_FACTOR_INTERZONE = 1.5
-GCP_FACTOR_CROSSREGION = 2.0
-
-# CP-SAT works on integers; energies are tracked in deci-Watts and converted back to Watts in meta.
-ENERGY_SCALE = 10
-
-
-def _parse_simple_properties(file_path: str) -> Dict[str, str]:
-    """Minimal .properties parser (key=value), compatible with project files."""
-    props: Dict[str, str] = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        continuation = ""
-        for raw in f:
-            line = raw.rstrip("\n")
-            if line.endswith("\\"):
-                continuation += line[:-1]
-                continue
-            line = (continuation + line).strip()
-            continuation = ""
-            if not line or line[0] in "#!":
-                continue
-            if "=" in line:
-                k, v = line.split("=", 1)
-            elif ":" in line:
-                k, v = line.split(":", 1)
-            else:
-                continue
-            props[k.strip()] = v.strip()
-    return props
-
-
-def _load_energy_settings(override_path: str = "") -> Dict[str, float]:
-    """Load GCP energy constants from a .properties file, with safe defaults."""
-    default_path = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "properties", "Energy_GCP.properties")
-    )
-    config_path = (
-        override_path
-        or os.environ.get("CSP_ENERGY_PROPERTIES", "")
-        or default_path
-    )
-
-    settings = {
-        "gcp.pue": GCP_PUE,
-        "gcp.p_vcpu_idle_w": GCP_P_VCPU_IDLE_W,
-        "gcp.p_vcpu_active_w": GCP_P_VCPU_ACTIVE_W,
-        "gcp.lat.intrazone_ms": GCP_LAT_INTRAZONE_MS,
-        "gcp.lat.interzone_ms": GCP_LAT_INTERZONE_MS,
-        "gcp.factor.intrazone": GCP_FACTOR_INTRAZONE,
-        "gcp.factor.interzone": GCP_FACTOR_INTERZONE,
-        "gcp.factor.crossregion": GCP_FACTOR_CROSSREGION,
-        "gcp.energy_scale": float(ENERGY_SCALE),
-    }
-
-    if os.path.exists(config_path):
-        try:
-            raw = _parse_simple_properties(config_path)
-            for key in list(settings.keys()):
-                if key in raw:
-                    settings[key] = float(raw[key])
-        except Exception:
-            # Keep defaults if the settings file is malformed.
-            pass
-
-    return settings
-
-
-def _link_factor_scaled(latency_ms: float, cfg: Dict[str, float]) -> int:
-    """Return GCP link factor scaled by ENERGY_SCALE (1.0/1.5/2.0 -> 10/15/20)."""
-    intrazone_ms = cfg["gcp.lat.intrazone_ms"]
-    interzone_ms = cfg["gcp.lat.interzone_ms"]
-    energy_scale = int(round(cfg["gcp.energy_scale"]))
-
-    if latency_ms <= intrazone_ms:
-        return int(round(cfg["gcp.factor.intrazone"] * energy_scale))
-    if latency_ms <= interzone_ms:
-        return int(round(cfg["gcp.factor.interzone"] * energy_scale))
-    return int(round(cfg["gcp.factor.crossregion"] * energy_scale))
+from src.gcpEnergyModel import _load_energy_settings, link_factor_scaled
 
 
 class CSP(PlacementAlgo):
@@ -295,7 +207,7 @@ class CSP(PlacementAlgo):
             if lat <= 0:
                 continue
 
-            factor_scaled = _link_factor_scaled(lat, cfg)
+            factor_scaled = link_factor_scaled(lat, cfg)
 
             for l_idx, (sc, dc, d_s) in enumerate(edges):
                 bw_req = int(d_s.get('bandwidth') or 0)
