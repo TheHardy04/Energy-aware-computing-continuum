@@ -25,7 +25,7 @@ fi
 echo "===================== Running python placement algorithm ... ===================="
 # venv activation
 if [ -f "~/venv/bin/activate" ]; then
-    source "~/venv/bin/activate"
+    source ~/venv/bin/activate
 else
     echo "⚠️  Warning : Python virtual environment not found at ~/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
