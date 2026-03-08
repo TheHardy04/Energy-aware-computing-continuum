@@ -69,6 +69,8 @@ public class CsvOneToOneScheduler implements IScheduler {
             // 1) Group executors by target host according to CSV
             // host -> list of executors that should run there
             Map<String, List<ExecutorDetails>> hostToExecs = new LinkedHashMap<>();
+            // host -> list of component names grouped for that host
+            Map<String, List<String>> hostToComponents = new LinkedHashMap<>();
 
             for (Map.Entry<String, String> rule : placement.entrySet()) {
                 String component = rule.getKey();
@@ -80,7 +82,7 @@ public class CsvOneToOneScheduler implements IScheduler {
                 }
 
                 hostToExecs.computeIfAbsent(hostOrId, k -> new ArrayList<>()).addAll(execs);
-                needs.remove(component);
+                hostToComponents.computeIfAbsent(hostOrId, k -> new ArrayList<>()).add(component);
             }
 
             // 2) Assign ONE worker slot per host, packing all its executors into that slot
@@ -105,6 +107,12 @@ public class CsvOneToOneScheduler implements IScheduler {
                 WorkerSlot chosen = slots.get(0); // ONE slot per VM/host
                 cluster.assign(chosen, topology.getId(), execsForHost);
                 usedSlots.add(chosen);
+
+                // Only remove components from needs when assignment succeeds.
+                // If host resolution fails, they remain and can be handled by fallback.
+                for (String component : hostToComponents.getOrDefault(hostOrId, Collections.emptyList())) {
+                    needs.remove(component);
+                }
 
                 LOG.info("Packed {} executors into ONE worker on host={} port={}",
                         execsForHost.size(), sup.getHost(), chosen.getPort());
@@ -297,8 +305,35 @@ public class CsvOneToOneScheduler implements IScheduler {
         try {
             Path p = Path.of(mappingFile);
             if (!Files.exists(p)) {
-                LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
-                return mapping;
+                // Fallback: if placement file is generic (e.g. placement.csv),
+                // auto-detect a single *_mapping.csv in the same directory.
+                Path placementPath = Path.of(placementCsvFile);
+                Path parent = placementPath.getParent();
+                if (parent != null && Files.isDirectory(parent)) {
+                    List<Path> candidates = new ArrayList<>();
+                    try (var stream = Files.list(parent)) {
+                        stream
+                            .filter(Files::isRegularFile)
+                            .filter(path -> path.getFileName().toString().endsWith("_mapping.csv"))
+                            .forEach(candidates::add);
+                    }
+
+                    if (candidates.size() == 1) {
+                        p = candidates.get(0);
+                        mappingFile = p.toString();
+                        LOG.info("Using auto-detected mapping file: {}", mappingFile);
+                    } else {
+                        LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
+                        if (candidates.size() > 1) {
+                            LOG.warn("Multiple *_mapping.csv files found in {}. Expected one. Candidates: {}",
+                                    parent, candidates);
+                        }
+                        return mapping;
+                    }
+                } else {
+                    LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
+                    return mapping;
+                }
             }
             if (!Files.isReadable(p)) {
                 LOG.warn("Host mapping file is not readable: {}", mappingFile);
