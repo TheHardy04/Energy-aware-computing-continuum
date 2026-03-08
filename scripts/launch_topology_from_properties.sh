@@ -7,9 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STORM_SCHEDULER_DIR="$PROJECT_ROOT/storm-scheduler"
 
-# Change to storm-scheduler module
-cd "$STORM_SCHEDULER_DIR"
-
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
 TOPOLOGY_CLASS="fr.dvrc.thardy.topology.TopologyFromProperties"
@@ -24,8 +21,16 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
+# Resolve properties file to absolute path before changing directories
 PROPERTIES_FILE="$1"
+if [[ "$PROPERTIES_FILE" != /* ]]; then
+    # If it's a relative path, resolve it from current directory
+    PROPERTIES_FILE="$(cd "$(dirname "$PROPERTIES_FILE")" 2>/dev/null && pwd)/$(basename "$PROPERTIES_FILE")"
+fi
 TOPOLOGY_NAME="${2:-TopologyFromProperties}"
+
+# Change to storm-scheduler module
+cd "$STORM_SCHEDULER_DIR"
 
 # Check if properties file exists
 if [ ! -f "$PROPERTIES_FILE" ]; then
