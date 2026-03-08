@@ -107,6 +107,9 @@ else
     echo "✓ Project already exists"
 fi
 
+# Making all scripts in the project executable (in case permissions were lost during cloning)
+find /home/storm/Energy-aware-computing-continuum -type f -name "*.sh" -exec chmod +x {} \;
+
 # --- CONFIGURE STORM FOR WORKER NODE ---
 echo "Configuring Storm for WORKER node..."
 

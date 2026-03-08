@@ -112,6 +112,9 @@ else
     echo "✓ Project already exists"
 fi
 
+# Making all scripts in the project executable (in case permissions were lost during cloning)
+find /home/storm/Energy-aware-computing-continuum -type f -name "*.sh" -exec chmod +x {} \;
+
 # --- CONFIGURE STORM FOR MASTER NODE ---
 echo "Configuring Storm for MASTER node..."
 echo "Generating Storm configuration with Nimbus at localhost (this is the master)"
@@ -185,6 +188,17 @@ echo "  1. SSH to this VM"
 echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
 echo "  3. Start master: ./scripts/start_master.sh"
 echo ""
+
+# Auto-launch Storm master services after setup
+echo "Launching Storm master services..."
+cd /home/storm/Energy-aware-computing-continuum/storm-scheduler
+if [ -x "./scripts/start_master.sh" ]; then
+    sudo -u storm bash ./scripts/start_master.sh || echo "Warning: failed to auto-start master services"
+elif [ -x "./start-master.sh" ]; then
+    sudo -u storm bash ./start-master.sh || echo "Warning: failed to auto-start master services"
+else
+    echo "Warning: master start script not found"
+fi
 
 # Mark completion in GCP logs
 echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
