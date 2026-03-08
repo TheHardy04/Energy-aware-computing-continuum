@@ -5,7 +5,7 @@ import time
 
 # --- CONFIGURATION ---
 ZONE = "europe-west9-a" 
-STARTUP_SCRIPT = "properties/vm_startup.sh"
+STARTUP_SCRIPT = r"gcp_automations\vm_startup.sh"
 
 MASTER_NAME = "storm-nimbus"
 MASTER_TYPE = "e2-medium" 
