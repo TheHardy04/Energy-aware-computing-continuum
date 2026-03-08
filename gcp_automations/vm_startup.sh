@@ -197,5 +197,16 @@ echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum/storm-scheduler"
 echo "  3. Start worker: ./scripts/start_worker.sh"
 echo ""
 
+# Auto-launch Storm worker after setup
+echo "Launching Storm worker..."
+cd /home/storm/Energy-aware-computing-continuum/storm-scheduler
+if [ -x "./scripts/start_worker.sh" ]; then
+    sudo -u storm bash ./scripts/start_worker.sh || echo "Warning: failed to auto-start worker"
+elif [ -x "./start-worker.sh" ]; then
+    sudo -u storm bash ./start-worker.sh || echo "Warning: failed to auto-start worker"
+else
+    echo "Warning: worker start script not found"
+fi
+
 # Mark completion in GCP logs
 echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
