@@ -20,10 +20,42 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+install_master_systemd_units() {
+    echo "Configuring systemd units for master services..."
+
+    cat > /etc/systemd/system/storm-master.service << 'EOF'
+[Unit]
+Description=Apache Storm Master services (repo script)
+After=network-online.target zookeeper.service
+Wants=network-online.target
+Requires=zookeeper.service
+
+[Service]
+Type=oneshot
+User=storm
+Group=storm
+Environment=STORM_HOME=/usr/local/storm
+WorkingDirectory=/home/storm/Energy-aware-computing-continuum
+ExecStart=/bin/bash -lc 'cd /home/storm/Energy-aware-computing-continuum && ./scripts/start_master.sh'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl disable storm-nimbus.service storm-supervisor.service 2>/dev/null || true
+    systemctl enable storm-master.service
+    systemctl restart storm-master.service || true
+    systemctl --no-pager --full status storm-master.service || true
+}
+
 # Skip if already installed (for VM restarts)
 if [[ -f "/usr/local/storm/bin/storm" ]]; then
     echo "Storm already installed, skipping setup"
+    install_master_systemd_units
     echo "Setup completed at: $(date)"
+    echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
     exit 0
 fi
 
@@ -185,20 +217,11 @@ echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
-echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum"
-echo "  3. Start master: ./scripts/start_master.sh"
+echo "  2. Run: systemctl status storm-master"
 echo ""
 
-# Auto-launch Storm master services after setup
-echo "Launching Storm master services..."
-cd /home/storm/Energy-aware-computing-continuum
-if [ -x "./scripts/start_master.sh" ]; then
-    sudo -u storm bash ./scripts/start_master.sh || echo "Warning: failed to auto-start master services"
-elif [ -x "./start-master.sh" ]; then
-    sudo -u storm bash ./start-master.sh || echo "Warning: failed to auto-start master services"
-else
-    echo "Warning: master start script not found"
-fi
+# Install and start systemd-managed master services
+install_master_systemd_units
 
 # Mark completion in GCP logs
 echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"

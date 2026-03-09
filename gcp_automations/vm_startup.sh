@@ -20,10 +20,41 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+install_worker_systemd_units() {
+    echo "Configuring systemd units for worker services..."
+
+    cat > /etc/systemd/system/storm-supervisor.service << 'EOF'
+[Unit]
+Description=Apache Storm Worker services (repo script)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=storm
+Group=storm
+Environment=STORM_HOME=/usr/local/storm
+WorkingDirectory=/home/storm/Energy-aware-computing-continuum
+ExecStart=/bin/bash -lc 'cd /home/storm/Energy-aware-computing-continuum && ./scripts/start_worker.sh'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable storm-supervisor.service
+    systemctl restart storm-supervisor.service || true
+    systemctl --no-pager --full status storm-supervisor.service || true
+}
+
 # Skip if already installed (for VM restarts)
 if [[ -f "/usr/local/storm/bin/storm" ]]; then
     echo "Storm already installed, skipping setup"
+    install_worker_systemd_units
     echo "Setup completed at: $(date)"
+    echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
     exit 0
 fi
 
@@ -189,20 +220,11 @@ echo "=========================================="
 echo ""
 echo "Next steps:"
 echo "  1. SSH to this VM"
-echo "  2. Run: cd /home/storm/Energy-aware-computing-continuum"
-echo "  3. Start worker: ./scripts/start_worker.sh"
+echo "  2. Run: systemctl status storm-supervisor"
 echo ""
 
-# Auto-launch Storm worker after setup
-echo "Launching Storm worker..."
-cd /home/storm/Energy-aware-computing-continuum
-if [ -x "./scripts/start_worker.sh" ]; then
-    sudo -u storm bash ./scripts/start_worker.sh || echo "Warning: failed to auto-start worker"
-elif [ -x "./start-worker.sh" ]; then
-    sudo -u storm bash ./start-worker.sh || echo "Warning: failed to auto-start worker"
-else
-    echo "Warning: worker start script not found"
-fi
+# Install and start systemd-managed worker service
+install_worker_systemd_units
 
 # Mark completion in GCP logs
 echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
