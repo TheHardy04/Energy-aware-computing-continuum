@@ -104,10 +104,10 @@ public class CsvOneToOneScheduler implements IScheduler {
             return; // Not scheduled yet
         }
 
-        Map<ExecutorDetails, WorkerSlot> executorToSlot = assignment.getExecutorToAssignment();
+        Map<ExecutorDetails, WorkerSlot> executorToSlot = assignment.getExecutorToSlot();
         if (executorToSlot == null) return;
         
-        Set<ExecutorDetails> executorsToUnassign = new HashSet<>();
+        boolean needsUnassign = false;
 
         for (Map.Entry<ExecutorDetails, WorkerSlot> entry : executorToSlot.entrySet()) {
             ExecutorDetails executor = entry.getKey();
@@ -126,22 +126,22 @@ public class CsvOneToOneScheduler implements IScheduler {
             SupervisorDetails desiredSupervisor = resolveSupervisor(cluster, targetHostOrId, hostIdToVmName);
             if (desiredSupervisor == null) {
                 // If the target doesn't exist, we can't move it there.
-                // Keep it where it is or let fallback handle?
-                // For now, keep it where it is to avoid "unscheduled" state if no fallback works.
+                // Keep it where it is or let fallback handle.
                 continue;
             }
 
             // Check if current slot is on the desired supervisor
             if (!slot.getNodeId().equals(desiredSupervisor.getId())) {
-                LOG.info("Executor {} (component {}) is on wrong supervisor {}. Target is {}. Unassigning...",
+                LOG.info("Executor {} (component {}) is on wrong supervisor {}. Target is {}. Triggering re-schedule.",
                         executor, componentId, slot.getNodeId(), desiredSupervisor.getId());
-                executorsToUnassign.add(executor);
+                needsUnassign = true;
+                break; // Found one, that's enough to trigger full re-schedule
             }
         }
 
-        if (!executorsToUnassign.isEmpty()) {
-            LOG.info("Unassigning {} improperly placed executors.", executorsToUnassign.size());
-            cluster.unassign(topology.getId(), executorsToUnassign);
+        if (needsUnassign) {
+            LOG.info("Unassigning all executors for topology {} to correct placement.", topology.getId());
+            cluster.unassign(topology.getId());
         }
     }
 
