@@ -156,62 +156,52 @@ def ensure_storm_ui_firewall_rule():
     ]
     run_gcloud(create_cmd)
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python deploy_gcp_from_properties.py <path_to_properties_file>")
-        sys.exit(1)
-        
-    prop_file = sys.argv[1]
-    hosts, zones = parse_properties(prop_file)
-    print(f"🚀 Found {len(hosts)} worker hosts to deploy from {prop_file}.")
-
-    # Ensure nodes can communicate over required Storm ports.
-    ensure_storm_firewall_rule()
-    ensure_storm_ui_firewall_rule()
-
-    # ---------------------------------------------------------
-    # 1. DEPLOY (OR REUSE) THE DEDICATED NIMBUS MASTER
-    # ---------------------------------------------------------
+def deploy_master(master_name, master_type, zone, startup_script):
+    """Deploys the Nimbus master VM if it doesn't already exist."""
     print("\n==================================================")
-    if vm_exists(MASTER_NAME, MASTER_ZONE):
-        print(f"🟢 Master {MASTER_NAME} already exists. Reusing it.")
-    else:
-        print(f"🧠 Deploying Dedicated Master: {MASTER_NAME} ({MASTER_TYPE}) in {MASTER_ZONE}")
-        cmd_master = [
-            'gcloud', 'compute', 'instances', 'create', MASTER_NAME,
-            f'--machine-type={MASTER_TYPE}',
-            f'--zone={MASTER_ZONE}',
-            '--image-family=ubuntu-minimal-2404-lts-amd64',
-            '--image-project=ubuntu-os-cloud',
-            '--provisioning-model=SPOT',
-            f'--metadata-from-file=startup-script={MASTER_STARTUP_SCRIPT}',
-            '--tags=storm-node'
-        ]
-        run_gcloud(cmd_master)
-        print("⏳ Waiting 5 seconds for network allocation...")
-        time.sleep(5)
-    
-    nimbus_ip = get_vm_ip(MASTER_NAME, MASTER_ZONE)
+    if vm_exists(master_name, zone):
+        print(f"🟢 Master {master_name} already exists. Reusing it.")
+        return
+
+    print(f"🧠 Deploying Dedicated Master: {master_name} ({master_type}) in {zone}")
+    cmd_master = [
+        'gcloud', 'compute', 'instances', 'create', master_name,
+        f'--machine-type={master_type}',
+        f'--zone={zone}',
+        '--image-family=ubuntu-minimal-2404-lts-amd64',
+        '--image-project=ubuntu-os-cloud',
+        '--provisioning-model=SPOT',
+        f'--metadata-from-file=startup-script={startup_script}',
+        '--tags=storm-node'
+    ]
+    run_gcloud(cmd_master)
+    print("⏳ Waiting 5 seconds for network allocation...")
+    time.sleep(5)
+
+def get_and_validate_master_ip(master_name, zone):
+    """Retrieves and validates the master VM's internal IP."""
+    nimbus_ip = get_vm_ip(master_name, zone)
     if not nimbus_ip:
         print("❌ Failed to retrieve Nimbus IP. Exiting.")
         sys.exit(1)
     if not validate_ip(nimbus_ip):
         print(f"❌ Invalid IP address format: {nimbus_ip}. Exiting.")
         sys.exit(1)
+    
     print(f"✅ Master Internal IP is: {nimbus_ip}")
+    return nimbus_ip
 
-    # ---------------------------------------------------------
-    # 2. DEPLOY (OR REUSE) THE INFRASTRUCTURE WORKERS
-    # ---------------------------------------------------------
-    name_counters = {v["prefix"]: 1 for v in MACHINE_MAP.values()}
+def deploy_workers(hosts, zones, machine_map, nimbus_ip, worker_startup_script):
+    """Deploys worker VMs based on the hosts configuration."""
+    name_counters = {v["prefix"]: 1 for v in machine_map.values()}
     
     for index, (cpu, ram) in enumerate(hosts):
         zone = zones[index]
-        if (cpu, ram) not in MACHINE_MAP:
+        if (cpu, ram) not in machine_map:
             print(f"⚠️ Unknown config {cpu} CPU, {ram} RAM. Skipping.")
             continue
             
-        vm_spec = MACHINE_MAP[(cpu, ram)]
+        vm_spec = machine_map[(cpu, ram)]
         vm_name = f"{vm_spec['prefix']}-{name_counters[vm_spec['prefix']]}"
         name_counters[vm_spec['prefix']] += 1
         
@@ -229,11 +219,33 @@ def main():
                 '--image-family=ubuntu-minimal-2404-lts-amd64',
                 '--image-project=ubuntu-os-cloud',
                 '--provisioning-model=SPOT',
-                f'--metadata-from-file=startup-script={WORKER_STARTUP_SCRIPT}',
+                f'--metadata-from-file=startup-script={worker_startup_script}',
                 f'--metadata=nimbus-ip={nimbus_ip}',
                 '--tags=storm-node'
             ]
             run_gcloud(cmd_worker)
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python deploy_gcp_from_properties.py <path_to_properties_file>")
+        sys.exit(1)
+        
+    prop_file = sys.argv[1]
+    hosts, zones = parse_properties(prop_file)
+    print(f"🚀 Found {len(hosts)} worker hosts to deploy from {prop_file}.")
+
+    # Ensure nodes can communicate over required Storm ports.
+    ensure_storm_firewall_rule()
+    ensure_storm_ui_firewall_rule()
+
+    # 1. DEPLOY (OR REUSE) THE DEDICATED NIMBUS MASTER
+    deploy_master(MASTER_NAME, MASTER_TYPE, MASTER_ZONE, MASTER_STARTUP_SCRIPT)
+    
+    # 2. GET MASTER IP
+    nimbus_ip = get_and_validate_master_ip(MASTER_NAME, MASTER_ZONE)
+
+    # 3. DEPLOY (OR REUSE) THE INFRASTRUCTURE WORKERS
+    deploy_workers(hosts, zones, MACHINE_MAP, nimbus_ip, WORKER_STARTUP_SCRIPT)
 
     print("\n🎉 Infrastructure sync complete!")
     
