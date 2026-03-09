@@ -7,6 +7,8 @@ import subprocess
 import sys
 import time
 
+IS_WINDOWS = (os.name == 'nt')
+
 # --- CONFIGURATION ---
 DEFAULT_ZONE = "europe-west9-a"
 MASTER_ZONE = DEFAULT_ZONE
@@ -85,7 +87,7 @@ def run_gcloud(cmd, ignore_errors=False):
     # Print the command so you can track progress
     print(f"   [Debug] Running: {' '.join(cmd)}") 
     
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, shell=IS_WINDOWS, capture_output=True, text=True)
     if result.returncode != 0 and not ignore_errors:
         print(f"❌ Error running command: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout.strip(), result.returncode
@@ -234,6 +236,10 @@ def main():
             run_gcloud(cmd_worker)
 
     print("\n🎉 Infrastructure sync complete!")
+    
+    print(f"\n🔌 Connecting to Master: {MASTER_NAME}...")
+    # On Windows, shell=True is needed to find the 'gcloud' executable (which is often a cmd/bat file)
+    subprocess.run(["gcloud", "compute", "ssh", MASTER_NAME, f"--zone={MASTER_ZONE}"], shell=IS_WINDOWS)
 
 if __name__ == "__main__":
     main()

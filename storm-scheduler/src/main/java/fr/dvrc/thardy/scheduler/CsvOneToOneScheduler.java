@@ -55,104 +55,132 @@ public class CsvOneToOneScheduler implements IScheduler {
                 continue;
             }
 
-            LOG.info("Scheduling topology: {} ({})", topology.getName(), topology.getId());
+            scheduleTopology(cluster, topology, placement, hostIdToVmName);
+        }
+    }
 
-            // component -> executors that still need scheduling
-            Map<String, List<ExecutorDetails>> needs =
-                    new HashMap<>(cluster.getNeedsSchedulingComponentToExecutors(topology));
+    private void scheduleTopology(Cluster cluster, TopologyDetails topology,
+                                  Map<String, String> placement,
+                                  Map<String, String> hostIdToVmName) {
+        LOG.info("Scheduling topology: {} ({})", topology.getName(), topology.getId());
 
-            if (needs.isEmpty()) {
-                LOG.info("Nothing to schedule for topology {}", topology.getName());
+        // component -> executors that still need scheduling
+        Map<String, List<ExecutorDetails>> needs =
+                new HashMap<>(cluster.getNeedsSchedulingComponentToExecutors(topology));
+
+        if (needs.isEmpty()) {
+            LOG.info("Nothing to schedule for topology {}", topology.getName());
+            return;
+        }
+
+        // 1) Group executors by target host according to CSV
+        // host -> list of executors that should run there
+        Map<String, List<ExecutorDetails>> hostToExecs = new LinkedHashMap<>();
+        // host -> list of component names grouped for that host
+        Map<String, List<String>> hostToComponents = new LinkedHashMap<>();
+
+        groupExecutorsByHost(needs, placement, hostToExecs, hostToComponents);
+
+        // 2) Assign ONE worker slot per host, packing all its executors into that slot
+        Set<WorkerSlot> usedSlots = assignExecutorsFromCsv(cluster, topology, hostToExecs, hostToComponents, needs, hostIdToVmName);
+
+        // 3) Fallback: pack remaining components into available slots
+        if (!needs.isEmpty()) {
+            assignRemainingExecutors(cluster, topology, needs, usedSlots);
+        }
+    }
+
+    private void groupExecutorsByHost(Map<String, List<ExecutorDetails>> needs,
+                                      Map<String, String> placement,
+                                      Map<String, List<ExecutorDetails>> hostToExecs,
+                                      Map<String, List<String>> hostToComponents) {
+        for (Map.Entry<String, String> rule : placement.entrySet()) {
+            String component = rule.getKey();
+            String hostOrId = rule.getValue();
+
+            List<ExecutorDetails> execs = needs.get(component);
+            if (execs == null || execs.isEmpty()) {
+                continue; // component not in this topology or already scheduled
+            }
+
+            hostToExecs.computeIfAbsent(hostOrId, k -> new ArrayList<>()).addAll(execs);
+            hostToComponents.computeIfAbsent(hostOrId, k -> new ArrayList<>()).add(component);
+        }
+    }
+
+    private Set<WorkerSlot> assignExecutorsFromCsv(Cluster cluster, TopologyDetails topology,
+                                                   Map<String, List<ExecutorDetails>> hostToExecs,
+                                                   Map<String, List<String>> hostToComponents,
+                                                   Map<String, List<ExecutorDetails>> needs,
+                                                   Map<String, String> hostIdToVmName) {
+        Set<WorkerSlot> usedSlots = new LinkedHashSet<>();
+
+        for (Map.Entry<String, List<ExecutorDetails>> entry : hostToExecs.entrySet()) {
+            String hostOrId = entry.getKey();
+            List<ExecutorDetails> execsForHost = entry.getValue();
+
+            SupervisorDetails sup = resolveSupervisor(cluster, hostOrId, hostIdToVmName);
+            if (sup == null) {
+                LOG.warn("No supervisor found for '{}'. Those executors remain unscheduled.", hostOrId);
                 continue;
             }
 
-            // 1) Group executors by target host according to CSV
-            // host -> list of executors that should run there
-            Map<String, List<ExecutorDetails>> hostToExecs = new LinkedHashMap<>();
-            // host -> list of component names grouped for that host
-            Map<String, List<String>> hostToComponents = new LinkedHashMap<>();
-
-            for (Map.Entry<String, String> rule : placement.entrySet()) {
-                String component = rule.getKey();
-                String hostOrId = rule.getValue();
-
-                List<ExecutorDetails> execs = needs.get(component);
-                if (execs == null || execs.isEmpty()) {
-                    continue; // component not in this topology or already scheduled
-                }
-
-                hostToExecs.computeIfAbsent(hostOrId, k -> new ArrayList<>()).addAll(execs);
-                hostToComponents.computeIfAbsent(hostOrId, k -> new ArrayList<>()).add(component);
+            List<WorkerSlot> slots = cluster.getAvailableSlots(sup);
+            if (slots == null || slots.isEmpty()) {
+                LOG.warn("No available worker slots on host={} id={}", sup.getHost(), sup.getId());
+                continue;
             }
 
-            // 2) Assign ONE worker slot per host, packing all its executors into that slot
-            Set<WorkerSlot> usedSlots = new LinkedHashSet<>();
+            WorkerSlot chosen = slots.get(0); // ONE slot per VM/host
+            cluster.assign(chosen, topology.getId(), execsForHost);
+            usedSlots.add(chosen);
 
-            for (Map.Entry<String, List<ExecutorDetails>> entry : hostToExecs.entrySet()) {
-                String hostOrId = entry.getKey();
-                List<ExecutorDetails> execsForHost = entry.getValue();
-
-                SupervisorDetails sup = resolveSupervisor(cluster, hostOrId, hostIdToVmName);
-                if (sup == null) {
-                    LOG.warn("No supervisor found for '{}'. Those executors remain unscheduled.", hostOrId);
-                    continue;
-                }
-
-                List<WorkerSlot> slots = cluster.getAvailableSlots(sup);
-                if (slots == null || slots.isEmpty()) {
-                    LOG.warn("No available worker slots on host={} id={}", sup.getHost(), sup.getId());
-                    continue;
-                }
-
-                WorkerSlot chosen = slots.get(0); // ONE slot per VM/host
-                cluster.assign(chosen, topology.getId(), execsForHost);
-                usedSlots.add(chosen);
-
-                // Only remove components from needs when assignment succeeds.
-                // If host resolution fails, they remain and can be handled by fallback.
-                for (String component : hostToComponents.getOrDefault(hostOrId, Collections.emptyList())) {
-                    needs.remove(component);
-                }
-
-                LOG.info("Packed {} executors into ONE worker on host={} port={}",
-                        execsForHost.size(), sup.getHost(), chosen.getPort());
+            // Only remove components from needs when assignment succeeds.
+            for (String component : hostToComponents.getOrDefault(hostOrId, Collections.emptyList())) {
+                needs.remove(component);
             }
 
-            // 3) Fallback: pack remaining components into available slots
-            // Each slot can only hold one assignment, so ensure we don't re-assign to used slots
-            if (!needs.isEmpty()) {
-                // Get all available slots from cluster, excluding those already assigned in step 2
-                List<WorkerSlot> availableSlots = new ArrayList<>();
-                for (WorkerSlot slot : cluster.getAvailableSlots()) {
-                    if (!usedSlots.contains(slot)) {
-                        availableSlots.add(slot);
-                    }
-                }
+            LOG.info("Packed {} executors into ONE worker on host={} port={}",
+                    execsForHost.size(), sup.getHost(), chosen.getPort());
+        }
+        return usedSlots;
+    }
 
-                // If nothing was assigned yet, also consider existing assignment slots
-                if (availableSlots.isEmpty() && !usedSlots.isEmpty()) {
-                    LOG.warn("No more free slots available. {} components may remain unscheduled.", needs.size());
-                }
-
-                int slotIdx = 0;
-                for (Map.Entry<String, List<ExecutorDetails>> rem : needs.entrySet()) {
-                    if (availableSlots.isEmpty()) {
-                        LOG.warn("No slots available for component '{}'. Remaining: {}",
-                                rem.getKey(), needs.keySet());
-                        break;
-                    }
-
-                    WorkerSlot target = availableSlots.get(slotIdx % availableSlots.size());
-                    cluster.assign(target, topology.getId(), rem.getValue());
-                    usedSlots.add(target);
-                    availableSlots.remove(slotIdx % availableSlots.size());
-
-                    LOG.info("Fallback packed component '{}' into available worker nodeId={} port={}",
-                            rem.getKey(), target.getNodeId(), target.getPort());
-
-                    slotIdx++;
-                }
+    private void assignRemainingExecutors(Cluster cluster, TopologyDetails topology,
+                                          Map<String, List<ExecutorDetails>> needs,
+                                          Set<WorkerSlot> usedSlots) {
+        // Get all available slots from cluster, excluding those already assigned in step 2
+        List<WorkerSlot> availableSlots = new ArrayList<>();
+        for (WorkerSlot slot : cluster.getAvailableSlots()) {
+            if (!usedSlots.contains(slot)) {
+                availableSlots.add(slot);
             }
+        }
+
+        // If nothing was assigned yet, also consider existing assignment slots
+        if (availableSlots.isEmpty() && !usedSlots.isEmpty()) {
+            LOG.warn("No more free slots available. {} components may remain unscheduled.", needs.size());
+        }
+
+        int slotIdx = 0;
+        for (Map.Entry<String, List<ExecutorDetails>> rem : needs.entrySet()) {
+            if (availableSlots.isEmpty()) {
+                LOG.warn("No slots available for component '{}'. Remaining: {}",
+                        rem.getKey(), needs.keySet());
+                break;
+            }
+
+            // Simple distribution: pick a slot and use it.
+            // Using modulo logic as original code did, but safer logic could be just remove(0)
+            WorkerSlot target = availableSlots.get(slotIdx % availableSlots.size());
+            cluster.assign(target, topology.getId(), rem.getValue());
+            usedSlots.add(target);
+            availableSlots.remove(slotIdx % availableSlots.size());
+
+            LOG.info("Fallback packed component '{}' into available worker nodeId={} port={}",
+                    rem.getKey(), target.getNodeId(), target.getPort());
+
+            slotIdx++;
         }
     }
 
@@ -286,92 +314,38 @@ public class CsvOneToOneScheduler implements IScheduler {
 
     /**
      * Load host ID to VM name mapping from a separate CSV file
-     * File should be named similarly to placement CSV (e.g., if placement is "placement.csv", mapping is "placement_mapping.csv")
-     * Format: host, vm
-     *         0, worker-server-1
-     *         1, worker-edge-1
      */
     private Map<String, String> loadHostMapping(String placementCsvFile) {
         Map<String, String> mapping = new HashMap<>();
+        Path mappingFile = findMappingFile(placementCsvFile);
 
-        // Derive mapping file name from placement CSV file
-        String mappingFile;
-        if (placementCsvFile.endsWith(".csv")) {
-            mappingFile = placementCsvFile.substring(0, placementCsvFile.length() - 4) + "_mapping.csv";
-        } else {
-            mappingFile = placementCsvFile + "_mapping.csv";
+        if (mappingFile == null) {
+            return mapping;
         }
 
-        try {
-            Path p = Path.of(mappingFile);
-            if (!Files.exists(p)) {
-                // Fallback 1: check for generic "mapping.csv" in the same directory
-                Path placementPath = Path.of(placementCsvFile);
-                Path parent = placementPath.getParent();
-                if (parent != null && Files.isDirectory(parent)) {
-                    Path genericMapping = parent.resolve("mapping.csv");
-                    if (Files.exists(genericMapping) && Files.isReadable(genericMapping)) {
-                        p = genericMapping;
-                        mappingFile = p.toString();
-                        LOG.info("Using generic mapping file: {}", mappingFile);
-                    } else {
-                        // Fallback 2: auto-detect a single *_mapping.csv in the same directory
-                        List<Path> candidates = new ArrayList<>();
-                        try (var stream = Files.list(parent)) {
-                            stream
-                                .filter(Files::isRegularFile)
-                                .filter(path -> path.getFileName().toString().endsWith("_mapping.csv"))
-                                .forEach(candidates::add);
-                        }
+        try (FileReader fileReader = new FileReader(mappingFile.toFile());
+             CSVReader reader = new CSVReader(fileReader)) {
+            String[] row;
+            boolean first = true;
 
-                        if (candidates.size() == 1) {
-                            p = candidates.get(0);
-                            mappingFile = p.toString();
-                            LOG.info("Using auto-detected mapping file: {}", mappingFile);
-                        } else {
-                            LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
-                            if (candidates.size() > 1) {
-                                LOG.warn("Multiple *_mapping.csv files found in {}. Expected one. Candidates: {}",
-                                        parent, candidates);
-                            }
-                            return mapping;
-                        }
+            while ((row = reader.readNext()) != null) {
+                if (row.length < 2) continue;
+
+                if (first) {
+                    first = false;
+                    if ("host".equalsIgnoreCase(row[0].trim())) {
+                        continue;
                     }
-                } else {
-                    LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
-                    return mapping;
                 }
-            }
-            if (!Files.isReadable(p)) {
-                LOG.warn("Host mapping file is not readable: {}", mappingFile);
-                return mapping;
-            }
 
-            try (FileReader fileReader = new FileReader(mappingFile);
-                 CSVReader reader = new CSVReader(fileReader)) {
-                String[] row;
-                boolean first = true;
+                String hostId = row[0] == null ? "" : row[0].trim();
+                String vmName = row[1] == null ? "" : row[1].trim();
 
-                while ((row = reader.readNext()) != null) {
-                    if (row.length < 2) continue;
+                if (hostId.isEmpty() || vmName.isEmpty()) continue;
+                if (hostId.startsWith("#")) continue; // allow comments
 
-                    if (first) {
-                        // Skip header line if present (host, vm)
-                        first = false;
-                        if ("host".equalsIgnoreCase(row[0].trim())) {
-                            continue;
-                        }
-                    }
-
-                    String hostId = row[0] == null ? "" : row[0].trim();
-                    String vmName = row[1] == null ? "" : row[1].trim();
-
-                    if (hostId.isEmpty() || vmName.isEmpty()) continue;
-                    if (hostId.startsWith("#")) continue; // allow comments
-
-                    mapping.put(hostId, vmName);
-                    LOG.debug("Loaded mapping: host {} -> VM {}", hostId, vmName);
-                }
+                mapping.put(hostId, vmName);
+                LOG.debug("Loaded mapping: host {} -> VM {}", hostId, vmName);
             }
 
             LOG.info("Loaded {} host-to-VM mappings from {}", mapping.size(), mappingFile);
@@ -380,5 +354,61 @@ public class CsvOneToOneScheduler implements IScheduler {
         }
 
         return mapping;
+    }
+
+    private Path findMappingFile(String placementCsvFile) {
+        // 1. Try deriving from placement file name: placement.csv -> placement_mapping.csv
+        String mappingFileName;
+        if (placementCsvFile.endsWith(".csv")) {
+            mappingFileName = placementCsvFile.substring(0, placementCsvFile.length() - 4) + "_mapping.csv";
+        } else {
+            mappingFileName = placementCsvFile + "_mapping.csv";
+        }
+
+        Path p = Path.of(mappingFileName);
+        if (Files.exists(p) && Files.isReadable(p)) {
+            return p;
+        }
+
+        // 2. Fallbacks in the same directory
+        Path placementPath = Path.of(placementCsvFile);
+        Path parent = placementPath.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            LOG.debug("Host mapping file does not exist: {} (optional)", mappingFileName);
+            return null;
+        }
+
+        // 2a. Check for generic "mapping.csv"
+        Path genericMapping = parent.resolve("mapping.csv");
+        if (Files.exists(genericMapping) && Files.isReadable(genericMapping)) {
+            LOG.info("Using generic mapping file: {}", genericMapping);
+            return genericMapping;
+        }
+
+        // 2b. Auto-detect a single *_mapping.csv
+        List<Path> candidates = new ArrayList<>();
+        try (var stream = Files.list(parent)) {
+            stream
+                .filter(Files::isRegularFile)
+                .filter(path -> path.getFileName().toString().endsWith("_mapping.csv"))
+                .forEach(candidates::add);
+        } catch (Exception e) {
+            LOG.warn("Error scanning directory for mapping files: {}", e.getMessage());
+        }
+
+        if (candidates.size() == 1) {
+            Path auto = candidates.get(0);
+            LOG.info("Using auto-detected mapping file: {}", auto);
+            return auto;
+        }
+
+        if (candidates.size() > 1) {
+            LOG.warn("Multiple *_mapping.csv files found in {}. Expected one. Candidates: {}",
+                    parent, candidates);
+        } else {
+            LOG.debug("Host mapping file does not exist: {} (optional)", mappingFileName);
+        }
+
+        return null;
     }
 }
