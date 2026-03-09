@@ -311,7 +311,6 @@ public class TopologyFromProperties {
         int componentsCount = Integer.parseInt(props.getProperty("application.components", "0"));
         List<Component> components = parseComponents(props);
         List<Link> links = parseLinks(props);
-        List<PlacementConstraint> constraints = parseConstraints(props);
 
         System.out.println("Building topology with " + components.size() + " components and " + links.size() + " links");
 
@@ -378,13 +377,6 @@ public class TopologyFromProperties {
         conf.setDebug(false);
         conf.setNumWorkers(3);
         conf.setNumAckers(0);
-
-        // Add constraint hints to configuration
-        for (PlacementConstraint constraint : constraints) {
-            String key = "component." + constraint.componentId + ".node.hint";
-            conf.put(key, constraint.nodeId);
-            System.out.println("Constraint: component_" + constraint.componentId + " -> node " + constraint.nodeId);
-        }
 
         // Submit topology
         System.out.println("\nSubmitting topology: " + topologyName);
