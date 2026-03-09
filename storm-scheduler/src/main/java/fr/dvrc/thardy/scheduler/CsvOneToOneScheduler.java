@@ -305,30 +305,37 @@ public class CsvOneToOneScheduler implements IScheduler {
         try {
             Path p = Path.of(mappingFile);
             if (!Files.exists(p)) {
-                // Fallback: if placement file is generic (e.g. placement.csv),
-                // auto-detect a single *_mapping.csv in the same directory.
+                // Fallback 1: check for generic "mapping.csv" in the same directory
                 Path placementPath = Path.of(placementCsvFile);
                 Path parent = placementPath.getParent();
                 if (parent != null && Files.isDirectory(parent)) {
-                    List<Path> candidates = new ArrayList<>();
-                    try (var stream = Files.list(parent)) {
-                        stream
-                            .filter(Files::isRegularFile)
-                            .filter(path -> path.getFileName().toString().endsWith("_mapping.csv"))
-                            .forEach(candidates::add);
-                    }
-
-                    if (candidates.size() == 1) {
-                        p = candidates.get(0);
+                    Path genericMapping = parent.resolve("mapping.csv");
+                    if (Files.exists(genericMapping) && Files.isReadable(genericMapping)) {
+                        p = genericMapping;
                         mappingFile = p.toString();
-                        LOG.info("Using auto-detected mapping file: {}", mappingFile);
+                        LOG.info("Using generic mapping file: {}", mappingFile);
                     } else {
-                        LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
-                        if (candidates.size() > 1) {
-                            LOG.warn("Multiple *_mapping.csv files found in {}. Expected one. Candidates: {}",
-                                    parent, candidates);
+                        // Fallback 2: auto-detect a single *_mapping.csv in the same directory
+                        List<Path> candidates = new ArrayList<>();
+                        try (var stream = Files.list(parent)) {
+                            stream
+                                .filter(Files::isRegularFile)
+                                .filter(path -> path.getFileName().toString().endsWith("_mapping.csv"))
+                                .forEach(candidates::add);
                         }
-                        return mapping;
+
+                        if (candidates.size() == 1) {
+                            p = candidates.get(0);
+                            mappingFile = p.toString();
+                            LOG.info("Using auto-detected mapping file: {}", mappingFile);
+                        } else {
+                            LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
+                            if (candidates.size() > 1) {
+                                LOG.warn("Multiple *_mapping.csv files found in {}. Expected one. Candidates: {}",
+                                        parent, candidates);
+                            }
+                            return mapping;
+                        }
                     }
                 } else {
                     LOG.debug("Host mapping file does not exist: {} (optional)", mappingFile);
