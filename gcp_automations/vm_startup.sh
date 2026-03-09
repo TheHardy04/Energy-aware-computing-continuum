@@ -45,10 +45,10 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
-apt-get install -y -qq openjdk-17-jdk-headless wget tar git maven vim || {
+apt-get install -y -qq openjdk-17-jdk-headless wget tar git maven iputils-ping vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget tar git maven vim
+    apt-get install -y openjdk-17-jdk-headless wget tar git maven iputils-ping vim
 }
 
 # Zookeeper is not needed on worker nodes (only on master)
