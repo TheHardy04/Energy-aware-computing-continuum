@@ -76,10 +76,10 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
-apt-get install -y -qq openjdk-17-jdk-headless wget tar git maven iputils-ping vim || {
+apt-get install -y -qq openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget tar git maven iputils-ping vim
+    apt-get install -y openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim
 }
 
 # Zookeeper is not needed on worker nodes (only on master)
@@ -89,10 +89,28 @@ java -version
 
 # --- DOWNLOAD & INSTALL APACHE STORM 2.8.3 ---
 echo "Installing Apache Storm..."
-STORM_VER="2.8.3"
+STORM_VER="${STORM_VER:-}"
+if [[ -z "$STORM_VER" ]]; then
+    echo "Resolving latest Apache Storm version..."
+    STORM_MAJOR="${STORM_MAJOR:-2}"
+    STORM_VER=$(curl -fsSL https://downloads.apache.org/storm/ \
+        | grep -oE "apache-storm-${STORM_MAJOR}\.[0-9]+\.[0-9]+/" \
+        | sed -E 's#apache-storm-([0-9]+\.[0-9]+\.[0-9]+)/#\1#' \
+        | sort -V \
+        | tail -n 1 || true)
+fi
+
+if [[ -z "$STORM_VER" ]]; then
+    STORM_VER="2.8.3"
+    echo "Warning: version discovery failed, falling back to $STORM_VER"
+fi
+
+echo "Using Apache Storm version: $STORM_VER"
+STORM_TGZ="apache-storm-$STORM_VER.tar.gz"
+STORM_URL="https://dlcdn.apache.org/storm/apache-storm-$STORM_VER/$STORM_TGZ"
 cd /tmp
-wget -q https://archive.apache.org/dist/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz || { echo "Error: Failed to download Apache Storm $STORM_VER." >&2; exit 1; }
-tar -zxf apache-storm-$STORM_VER.tar.gz
+wget "$STORM_URL" || { echo "Error: Failed to download Apache Storm $STORM_VER from $STORM_URL." >&2; exit 1; }
+tar -zxf "$STORM_TGZ"
 mv apache-storm-$STORM_VER /usr/local/storm
 
 # --- SET PERMISSIONS (SECURE) ---
@@ -126,7 +144,7 @@ fi
 ln -sf /usr/local/storm/bin/storm /usr/bin/storm
 
 # Cleanup
-rm -f /tmp/apache-storm-$STORM_VER.tar.gz
+rm -f "/tmp/$STORM_TGZ"
 
 # Clone project to storm user's home first (needed for storm.yaml)
 echo "Cloning project repository..."
