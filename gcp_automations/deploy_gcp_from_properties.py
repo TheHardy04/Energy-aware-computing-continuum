@@ -8,9 +8,13 @@ import sys
 import time
 
 # --- CONFIGURATION ---
-ZONE = "europe-west9-a" 
-MASTER_STARTUP_SCRIPT = os.path.join("gcp_automations", "master_vm_startup.sh")
-WORKER_STARTUP_SCRIPT = os.path.join("gcp_automations", "vm_startup.sh")
+DEFAULT_ZONE = "europe-west9-a"
+MASTER_ZONE = DEFAULT_ZONE
+
+# Resolve script directory (handles running from root or gcp_automations directory)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MASTER_STARTUP_SCRIPT = os.path.join(SCRIPT_DIR, "master_vm_startup.sh")
+WORKER_STARTUP_SCRIPT = os.path.join(SCRIPT_DIR, "vm_startup.sh")
 
 MASTER_NAME = "storm-nimbus"
 MASTER_TYPE = "e2-medium" 
@@ -36,7 +40,46 @@ def parse_properties(file_path):
         
     hosts_str = match.group(1).replace('\n', '').replace('\\', '').strip()
     host_pairs = re.findall(r'\{(\d+),\s*(\d+)\}', hosts_str)
-    return [(int(cpu), int(ram)) for cpu, ram in host_pairs]
+    hosts = [(int(cpu), int(ram)) for cpu, ram in host_pairs]
+
+    # Parse zones with a more robust line-by-line approach to handle backslash continuations
+    zones = []
+    lines = content.split('\n')
+    in_zones_section = False
+    for line in lines:
+        if 'hosts.zones' in line and '=' in line:
+            in_zones_section = True
+            # Extract the part after '='
+            after_eq = line.split('=', 1)[1].strip()
+            # Remove trailing backslash and add zones
+            after_eq = after_eq.rstrip('\\').strip()
+            if after_eq:
+                zones.extend([z.strip() for z in after_eq.split(',') if z.strip()])
+        elif in_zones_section:
+            # Continue collecting zones until we hit a line that starts a new property or is blank+comment
+            line = line.strip()
+            if not line or line.startswith('#'):
+                # End of zones section
+                break
+            if line and '=' in line and not any(c in line for c in ['{', ',']):
+                # Hit a new property definition
+                break
+            # Remove trailing backslash
+            line = line.rstrip('\\').strip()
+            if line:
+                zones.extend([z.strip() for z in line.split(',') if z.strip()])
+
+    if len(zones) > 0:
+        if len(zones) != len(hosts):
+            print(
+                f"❌ hosts.zones count ({len(zones)}) does not match hosts.configuration count ({len(hosts)})."
+            )
+            sys.exit(1)
+    else:
+        print(f"⚠️ hosts.zones not found in {file_path}. Falling back to default zone: {DEFAULT_ZONE}")
+        zones = [DEFAULT_ZONE] * len(hosts)
+
+    return hosts, zones
 
 def run_gcloud(cmd, ignore_errors=False):
     # Print the command so you can track progress
@@ -47,17 +90,17 @@ def run_gcloud(cmd, ignore_errors=False):
         print(f"❌ Error running command: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout.strip(), result.returncode
 
-def vm_exists(vm_name):
+def vm_exists(vm_name, zone):
     """Checks if a VM already exists in GCP."""
     # Added --quiet so it does no wait for user input
-    cmd = ['gcloud', 'compute', 'instances', 'describe', vm_name, f'--zone={ZONE}', '--format=value(name)', '--quiet']
+    cmd = ['gcloud', 'compute', 'instances', 'describe', vm_name, f'--zone={zone}', '--format=value(name)', '--quiet']
     stdout, returncode = run_gcloud(cmd, ignore_errors=True)
     return returncode == 0
 
-def get_vm_ip(vm_name):
+def get_vm_ip(vm_name, zone):
     """Fetches the internal IP of a VM."""
     import json
-    ip_cmd = ['gcloud', 'compute', 'instances', 'describe', vm_name, f'--zone={ZONE}', '--format=json']
+    ip_cmd = ['gcloud', 'compute', 'instances', 'describe', vm_name, f'--zone={zone}', '--format=json']
     stdout, _ = run_gcloud(ip_cmd)
     if stdout:
         data = json.loads(stdout)
@@ -117,7 +160,7 @@ def main():
         sys.exit(1)
         
     prop_file = sys.argv[1]
-    hosts = parse_properties(prop_file)
+    hosts, zones = parse_properties(prop_file)
     print(f"🚀 Found {len(hosts)} worker hosts to deploy from {prop_file}.")
 
     # Ensure nodes can communicate over required Storm ports.
@@ -128,14 +171,14 @@ def main():
     # 1. DEPLOY (OR REUSE) THE DEDICATED NIMBUS MASTER
     # ---------------------------------------------------------
     print("\n==================================================")
-    if vm_exists(MASTER_NAME):
+    if vm_exists(MASTER_NAME, MASTER_ZONE):
         print(f"🟢 Master {MASTER_NAME} already exists. Reusing it.")
     else:
-        print(f"🧠 Deploying Dedicated Master: {MASTER_NAME} ({MASTER_TYPE}) in {ZONE}")
+        print(f"🧠 Deploying Dedicated Master: {MASTER_NAME} ({MASTER_TYPE}) in {MASTER_ZONE}")
         cmd_master = [
             'gcloud', 'compute', 'instances', 'create', MASTER_NAME,
             f'--machine-type={MASTER_TYPE}',
-            f'--zone={ZONE}',
+            f'--zone={MASTER_ZONE}',
             '--image-family=ubuntu-minimal-2404-lts-amd64',
             '--image-project=ubuntu-os-cloud',
             '--provisioning-model=SPOT',
@@ -146,7 +189,7 @@ def main():
         print("⏳ Waiting 5 seconds for network allocation...")
         time.sleep(5)
     
-    nimbus_ip = get_vm_ip(MASTER_NAME)
+    nimbus_ip = get_vm_ip(MASTER_NAME, MASTER_ZONE)
     if not nimbus_ip:
         print("❌ Failed to retrieve Nimbus IP. Exiting.")
         sys.exit(1)
@@ -161,6 +204,7 @@ def main():
     name_counters = {v["prefix"]: 1 for v in MACHINE_MAP.values()}
     
     for index, (cpu, ram) in enumerate(hosts):
+        zone = zones[index]
         if (cpu, ram) not in MACHINE_MAP:
             print(f"⚠️ Unknown config {cpu} CPU, {ram} RAM. Skipping.")
             continue
@@ -171,15 +215,15 @@ def main():
         
         print(f"--------------------------------------------------")
         
-        if vm_exists(vm_name):
-            print(f"🟢 Worker {index}: {vm_name} already exists. Skipping creation.")
+        if vm_exists(vm_name, zone):
+            print(f"🟢 Worker {index}: {vm_name} already exists in {zone}. Skipping creation.")
         else:
-            print(f"⚙️ Deploying Worker {index}: {vm_name} ({vm_spec['type']})")
+            print(f"⚙️ Deploying Worker {index}: {vm_name} ({vm_spec['type']}) in {zone}")
             
             cmd_worker = [
                 'gcloud', 'compute', 'instances', 'create', vm_name,
                 f'--machine-type={vm_spec["type"]}',
-                f'--zone={ZONE}',
+                f'--zone={zone}',
                 '--image-family=ubuntu-minimal-2404-lts-amd64',
                 '--image-project=ubuntu-os-cloud',
                 '--provisioning-model=SPOT',
