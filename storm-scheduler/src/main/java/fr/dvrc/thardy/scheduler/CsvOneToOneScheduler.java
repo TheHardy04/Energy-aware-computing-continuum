@@ -64,7 +64,12 @@ public class CsvOneToOneScheduler implements IScheduler {
                                   Map<String, String> hostIdToVmName) {
         LOG.info("Scheduling topology: {} ({})", topology.getName(), topology.getId());
 
+        // 0) Pre-processing: Unassign executors that are currently placed on the WRONG host.
+        // This ensures that "Available Slots" are actually freed up for the correct placement.
+        unassignImproperlyPlacedExecutors(cluster, topology, placement, hostIdToVmName);
+
         // component -> executors that still need scheduling
+        // (This will now include the ones we just unassigned)
         Map<String, List<ExecutorDetails>> needs =
                 new HashMap<>(cluster.getNeedsSchedulingComponentToExecutors(topology));
 
@@ -88,6 +93,80 @@ public class CsvOneToOneScheduler implements IScheduler {
         if (!needs.isEmpty()) {
             assignRemainingExecutors(cluster, topology, needs, usedSlots);
         }
+    }
+
+    private void unassignImproperlyPlacedExecutors(Cluster cluster, TopologyDetails topology,
+                                                   Map<String, String> placement,
+                                                   Map<String, String> hostIdToVmName) {
+        // SchedulerAssignment contains the current assignment for this topology
+        SchedulerAssignment assignment = cluster.getAssignmentById(topology.getId());
+        if (assignment == null) {
+            return; // Not scheduled yet
+        }
+
+        Map<ExecutorDetails, WorkerSlot> executorToSlot = assignment.getExecutorToAssignment();
+        if (executorToSlot == null) return;
+        
+        Set<ExecutorDetails> executorsToUnassign = new HashSet<>();
+
+        for (Map.Entry<ExecutorDetails, WorkerSlot> entry : executorToSlot.entrySet()) {
+            ExecutorDetails executor = entry.getKey();
+            WorkerSlot slot = entry.getValue();
+
+            String componentId = topology.getExecutorToComponent().get(executor);
+            if (componentId == null) continue;
+            
+            // Determine desired placement
+            String targetHostOrId = getTargetHost(componentId, placement);
+            if (targetHostOrId == null) {
+                // No rule for this component, ignore it (keep where it is)
+                continue;
+            }
+
+            SupervisorDetails desiredSupervisor = resolveSupervisor(cluster, targetHostOrId, hostIdToVmName);
+            if (desiredSupervisor == null) {
+                // If the target doesn't exist, we can't move it there.
+                // Keep it where it is or let fallback handle?
+                // For now, keep it where it is to avoid "unscheduled" state if no fallback works.
+                continue;
+            }
+
+            // Check if current slot is on the desired supervisor
+            if (!slot.getNodeId().equals(desiredSupervisor.getId())) {
+                LOG.info("Executor {} (component {}) is on wrong supervisor {}. Target is {}. Unassigning...",
+                        executor, componentId, slot.getNodeId(), desiredSupervisor.getId());
+                executorsToUnassign.add(executor);
+            }
+        }
+
+        if (!executorsToUnassign.isEmpty()) {
+            LOG.info("Unassigning {} improperly placed executors.", executorsToUnassign.size());
+            cluster.unassign(topology.getId(), executorsToUnassign);
+        }
+    }
+
+    private String getTargetHost(String component, Map<String, String> placement) {
+        // First try exact match
+        if (placement.containsKey(component)) {
+            return placement.get(component);
+        }
+
+        // If component is numeric (e.g. "0"), try "component_0"
+        if (component.matches("\\d+")) {
+            String key = "component_" + component;
+            if (placement.containsKey(key)) {
+                return placement.get(key);
+            }
+        } 
+        // Or if placement key is numeric (e.g. "0") and component is "component_0"
+        else if (component.startsWith("component_")) {
+             String numericPart = component.substring("component_".length());
+             if (placement.containsKey(numericPart)) {
+                 return placement.get(numericPart);
+             }
+        }
+
+        return null;
     }
 
     private void groupExecutorsByHost(Map<String, List<ExecutorDetails>> needs,
