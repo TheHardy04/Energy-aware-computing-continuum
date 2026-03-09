@@ -30,14 +30,13 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=storm
 Group=storm
 Environment=STORM_HOME=/usr/local/storm
 WorkingDirectory=/home/storm/Energy-aware-computing-continuum
 ExecStart=/bin/bash -lc 'cd /home/storm/Energy-aware-computing-continuum && ./scripts/start_worker.sh'
-Restart=always
-RestartSec=5
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -76,10 +75,12 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
+apt-get update -qq || apt-get update  # Refresh right before install to avoid stale 404s
 apt-get install -y -qq openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim || {
     echo "Package installation encountered errors, attempting to fix..."
+    apt-get update
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim
+    apt-get install -y --fix-missing openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim
 }
 
 # Zookeeper is not needed on worker nodes (only on master)

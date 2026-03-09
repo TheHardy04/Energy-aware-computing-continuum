@@ -77,17 +77,23 @@ apt-get update -qq || {
 
 # Install packages with proper error handling
 echo "Installing Java, Git, Maven, and other tools..."
+apt-get update -qq || apt-get update  # Refresh right before install to avoid stale 404s
 apt-get install -y -qq openjdk-17-jdk-headless wget curl python3 tar git maven python3-pip python3.12-venv vim || {
     echo "Package installation encountered errors, attempting to fix..."
+    apt-get update
     apt-get install -f -y
-    apt-get install -y openjdk-17-jdk-headless wget curl python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
+    apt-get install -y --fix-missing openjdk-17-jdk-headless wget curl python3 tar git maven python3-pip python3-full python3-venv python3.12-venv vim
 }
 
 # Install zookeeper (required on master)
 echo "Installing Zookeeper..."
+apt-get update -qq || true  # Refresh before zookeeper install
 apt-get install -y -qq zookeeperd || {
-    echo "⚠ Warning: Zookeeper installation failed. Install manually if needed."
-    echo "  Zookeeper is REQUIRED on master nodes."
+    echo "⚠ Warning: Zookeeper installation failed. Retrying with --fix-missing..."
+    apt-get install -y --fix-missing zookeeperd || {
+        echo "⚠ Warning: Zookeeper installation failed. Install manually if needed."
+        echo "  Zookeeper is REQUIRED on master nodes."
+    }
 }
 
 # Verify Java installation
