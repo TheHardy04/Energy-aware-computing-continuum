@@ -154,12 +154,12 @@ L'infrastructure est modélisée comme $G_p = (V, E)$. Chaque VM $v_j \in V$ est
         \node[tier, fill=green!4, fit=(v1)(v2)(v3)(v4),
               label=below:{\scriptsize\itshape Fog/Edge -- europe-west9}] {};
     \end{scope}
-    \draw[lnk] (v0.south) -- node[font=\scriptsize, right, pos=0.52] {1\,Gbps / 40\,ms} (v1.north);
+    \draw[lnk] (v0.south) -- node[font=\scriptsize, right, pos=0.52] {1\,Gbps / 12\,ms} (v1.north);
     \draw[lnk] (v1.south west) -- node[font=\scriptsize, above left, pos=0.5] {500\,Mbps / 2\,ms} (v2.north);
     \draw[lnk] (v1.south) -- node[font=\scriptsize, right, pos=0.5] {500\,Mbps / 2\,ms} (v3.north);
-    \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {500\,Mbps / 2\,ms} (v4.north);
+    \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {500\,Mbps / 1\,ms} (v4.north);
     \end{tikzpicture}
-    \caption{Topologie GCP en 2 tiers. $v_0$ (Cloud, ew4) est relié à $v_1$--$v_4$ (Fog/Edge, ew9) via 1\,Gbps/40\,ms~; liens intra-région à 500\,Mbps/2\,ms. $\mathbf{v_2}$ héberge $s_0$ (contrainte DZ). Storm~Nimbus est hors placement.}
+    \caption{Topologie GCP en 2 tiers. $v_0$ (Cloud, ew4) est relié à $v_1$--$v_4$ (Fog/Edge, ew9) via 1\,Gbps/12\,ms~; liens intra-région à 500\,Mbps/(1--2)\,ms. $\mathbf{v_2}$ héberge $s_0$ (contrainte DZ). Storm~Nimbus est hors placement.}
     \label{fig:infra_gcp}
 \end{figure}
 
