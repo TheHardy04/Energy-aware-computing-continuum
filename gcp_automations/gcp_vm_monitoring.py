@@ -10,7 +10,7 @@ Authentication (local development):
 
 Example:
   python gcp_automations/gcp_vm_monitoring.py \
-	  --properties-file python_algo/properties/Infra_5nodes_GCP.properties \
+	  --infra python_algo/properties/Infra_5nodes_GCP.properties \
 	  --window-minutes 15
 """
 
@@ -28,6 +28,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 from google.auth import default as google_auth_default
 from google.auth.exceptions import DefaultCredentialsError
+try:
+	from google.cloud import compute_v1
+except ImportError:  # pragma: no cover
+	compute_v1 = None
 from google.cloud import monitoring_v3
 
 
@@ -121,6 +125,81 @@ def build_vm_name_filter(vm_names: Sequence[str]) -> str:
 	return " OR ".join(clauses)
 
 
+def extract_vm_name(
+	series: monitoring_v3.TimeSeries,
+	instance_name_by_id: Optional[Dict[str, str]] = None,
+) -> str:
+	"""Prefer human-readable VM name, fall back to instance_id when unavailable."""
+	try:
+		metadata_name = series.metadata.system_labels.get("name")
+		if metadata_name:
+			return str(metadata_name)
+	except AttributeError:
+		pass
+
+	try:
+		instance_id = str(series.resource.labels.get("instance_id", "unknown-vm"))
+		if instance_name_by_id and instance_id in instance_name_by_id:
+			return instance_name_by_id[instance_id]
+		return instance_id
+	except AttributeError:
+		return "unknown-vm"
+
+
+def resolve_instance_name_map(project_id: str, vm_names: Sequence[str]) -> Dict[str, str]:
+	"""Resolve numeric instance IDs to readable VM names for target VMs."""
+	if compute_v1 is None:
+		LOGGER.warning(
+			"google-cloud-compute is not installed; VM names may appear as instance IDs."
+		)
+		return {}
+
+	target_names = set(vm_names)
+	instance_name_by_id: Dict[str, str] = {}
+
+	try:
+		client = compute_v1.InstancesClient()
+		for _, scoped_list in client.aggregated_list(project=project_id):
+			instances = getattr(scoped_list, "instances", None)
+			if not instances:
+				continue
+			for instance in instances:
+				if instance.name in target_names and instance.id is not None:
+					instance_name_by_id[str(instance.id)] = instance.name
+	except Exception as exc:  # pylint: disable=broad-except
+		LOGGER.warning("Could not resolve instance ID to name mapping: %s", exc)
+		return {}
+
+	if instance_name_by_id:
+		LOGGER.info(
+			"Resolved %d instance-id to VM-name mappings",
+			len(instance_name_by_id),
+		)
+	else:
+		LOGGER.warning("No instance ID mappings found for target VM names.")
+
+	return instance_name_by_id
+
+
+def extract_point_value(point: monitoring_v3.Point) -> float:
+	"""Extract numeric point value regardless of protobuf oneof numeric type."""
+	# google-cloud-monitoring uses proto-plus wrappers; inspect underlying protobuf oneof.
+	value_pb = getattr(point.value, "_pb", None)
+	value_kind = value_pb.WhichOneof("value") if value_pb is not None else None
+	if value_kind == "double_value":
+		return float(point.value.double_value)
+	if value_kind == "int64_value":
+		return float(point.value.int64_value)
+	if value_kind == "bool_value":
+		return 1.0 if point.value.bool_value else 0.0
+	# Fallback path for unexpected wrappers: prefer explicit int metrics, then double.
+	if getattr(point.value, "int64_value", None) not in (None, 0):
+		return float(point.value.int64_value)
+	if getattr(point.value, "double_value", None) is not None:
+		return float(point.value.double_value)
+	return 0.0
+
+
 def resolve_project_id(project_id_arg: Optional[str]) -> str:
 	"""Resolve GCP project ID from CLI or ADC context."""
 	if project_id_arg:
@@ -142,6 +221,7 @@ def fetch_metric_timeseries(
 	start_time: datetime,
 	end_time: datetime,
 	alignment_seconds: int,
+	instance_name_by_id: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
 	"""Fetch one metric for all target VMs and return a normalized DataFrame."""
 	if not vm_names:
@@ -183,12 +263,7 @@ def fetch_metric_timeseries(
 	rows: List[Dict[str, object]] = []
 	try:
 		for series in client.list_time_series(request=request):
-			# Extract VM name from resource labels (instance_id)
-			# GCE resource labels contain: project_id, instance_id, zone
-			try:
-				vm_name = series.resource.labels.get("instance_id", "unknown-vm")
-			except AttributeError:
-				vm_name = "unknown-vm"
+			vm_name = extract_vm_name(series, instance_name_by_id=instance_name_by_id)
 			
 			LOGGER.debug("Processing time series for VM: %s", vm_name)
 			
@@ -201,7 +276,7 @@ def fetch_metric_timeseries(
 				else:
 					timestamp = ts
 
-				value = point.value.double_value
+				value = extract_point_value(point)
 				if metric_spec.dataframe_column == "CPU_Usage_Percent":
 					value *= 100.0
 
@@ -273,7 +348,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 		description="Fetch GCP VM metrics (CPU + network bytes) for experiment VMs."
 	)
 	parser.add_argument(
-		"--properties-file",
+		"--infra",
 		required=True,
 		type=Path,
 		help="Path to infra properties file used for deployment.",
@@ -330,7 +405,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 		if args.alignment_seconds <= 0:
 			raise ValueError("--alignment-seconds must be > 0")
 
-		hosts = parse_hosts_configuration(args.properties_file)
+		hosts = parse_hosts_configuration(args.infra)
 		vm_names = build_worker_vm_names(hosts)
 		if args.include_master:
 			vm_names = [MASTER_NAME, *vm_names]
@@ -341,6 +416,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 		project_id = resolve_project_id(args.project_id)
 		LOGGER.info("Resolved project: %s", project_id)
 		LOGGER.info("Monitoring %d VMs: %s", len(vm_names), ", ".join(vm_names))
+		instance_name_by_id = resolve_instance_name_map(project_id, vm_names)
 
 		end_time = datetime.now(timezone.utc)
 		start_time = end_time - timedelta(minutes=args.window_minutes)
@@ -364,6 +440,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 				start_time=start_time,
 				end_time=end_time,
 				alignment_seconds=args.alignment_seconds,
+				instance_name_by_id=instance_name_by_id,
 			)
 			LOGGER.info("Retrieved %d data points for %s", len(frame), metric.metric_type)
 			metric_frames.append(frame)
