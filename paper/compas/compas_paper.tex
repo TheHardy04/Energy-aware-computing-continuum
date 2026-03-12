@@ -6,7 +6,7 @@
 \usepackage{algpseudocode}
 \usepackage{enumitem}
 \usepackage{tikz}
-\usetikzlibrary{positioning, arrows.meta, shapes.geometric, calc, fit}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, calc, fit, backgrounds}
 
 \toappear{1}
 
@@ -68,13 +68,7 @@ Dans cet article, nous nous intéressons spécifiquement à la \emph{consommatio
 
 \subsection{Application DSP multi-composants}
 
-Nous considérons une application de type \emph{Data Stream Processing} (DSP), dans laquelle un flux continu de données est traité par un pipeline de composants. L'application est modélisée comme un graphe orienté $G_a = (S, L)$ où $S = \{s_0, s_1, \ldots, s_K\}$ est l'ensemble des composants et $L \subseteq S \times S$ l'ensemble des flux de communication. Le composant $s_0$ représente la \emph{source de données} (point d'entrée du pipeline, e.g., un flux de capteurs ou un broker de messages). Les composants $s_1, \ldots, s_K$ constituent les opérateurs de traitement. Chaque composant $s_i$ ($i \geq 1$) a des besoins~:
-\begin{itemize}[nosep]
-    \item $\psi_i^{cpu}$ : demande CPU (en vCPU ou millicores),
-    \item $\psi_i^{ram}$ : demande mémoire (en Mo),
-    \item $\lambda_i$ : taux de requêtes en entrée (req/s) pour le workload.
-\end{itemize}
-Chaque flux $(s_i, s_j) \in L$ est caractérisé par un débit de données $d_{ij}$ (Mo/s) et consomme de la bande passante sur le lien réseau entre les nœuds hébergeant $s_i$ et $s_j$. L'application impose une contrainte de latence bout-en-bout $\mathcal{L}_{max}$ entre la source $s_0$ et le dernier opérateur du pipeline.
+Une application DSP est modélisée comme un graphe orienté $G_a = (S, L)$~: $s_0$ est la source, $s_1,\ldots,s_K$ les $K$ opérateurs, chacun caractérisé par un triplet $(\psi_i^{cpu}, \psi_i^{ram}, \lambda_i)$ (CPU en vCPU, RAM en Mo, débit entrant en req/s). Chaque arc $(s_i, s_j) \in L$ porte un débit $d_{ij}$ (Mo/s) borné par la bande passante du lien physique entre nœuds hôtes. Une contrainte $\mathcal{L}_{max}$ borne la latence bout-en-bout du chemin $s_0 \to s_K$ (Figure~\ref{fig:app_graph}).
 
 \begin{figure}[H]
     \centering
@@ -110,24 +104,13 @@ Chaque flux $(s_i, s_j) \in L$ est caractérisé par un débit de données $d_{i
       ([yshift=-0.7cm]s0.south) -- ([yshift=-0.7cm]s4.south)
       node[midway, below, font=\scriptsize, red!80] {$\mathcal{L}_{max}$ (bout-en-bout)};
     \end{tikzpicture}
-    \caption{Graphe applicatif DSP~: source de données $s_0$ et pipeline à 4~opérateurs avec flux de données et contrainte de latence bout-en-bout.}
+    \caption{Graphe applicatif DSP~: source $s_0$ et 4~opérateurs ($s_1$--$s_4$) reliés par des flux 400~Mbps~; contrainte de latence bout-en-bout $\mathcal{L}_{max}$.}
     \label{fig:app_graph}
 \end{figure}
 
 \subsection{Infrastructure physique}
 
-L'infrastructure est modélisée comme un graphe $G_p = (V, E)$ où $V = \{v_1, \ldots, v_N\}$ est l'ensemble des machines virtuelles (VMs) et $E$ les liens réseau. Chaque VM $v_j$ dispose de~:
-\begin{itemize}[nosep]
-    \item $C_j^{cpu}$ : capacité CPU disponible (vCPU),
-    \item $C_j^{ram}$ : capacité mémoire (Mo),
-    \item $P_{idle,j}$, $P_{max,j}$ : puissance au repos et à pleine charge (W),
-    \item $r_j$ : zone de déploiement (e.g., région géographique).
-\end{itemize}
-Chaque lien $(v_j, v_k) \in E$ est caractérisé par une latence mesurée $\ell_{jk}$ (ms) et une bande passante $\mathcal{B}_{jk}$ (Mbps). La bande passante constitue une contrainte importante~: un flux $d_{ij}$ entre deux composants placés sur des VMs distantes ne peut excéder $\mathcal{B}_{\pi(s_i),\pi(s_j)}$. Les latences intra-zone, inter-zone et inter-région sont mesurées empiriquement.
-
-\smallskip
-\noindent\textbf{Cas d'étude~: Google Cloud Platform.}
-Dans ce travail, nous instancions cette modélisation sur des VMs Google Compute Engine (GCE) de types hétérogènes, réparties dans plusieurs zones et régions (\ref{tab:vms}). Ce choix est motivé par la disponibilité de types de machines variés (familles e2, n2) et par la possibilité de mesurer les latences et bandes passantes inter-zones de manière empirique (\ref{sec:setup}).
+L'infrastructure est modélisée comme $G_p = (V, E)$. Chaque VM $v_j \in V$ est décrite par $(C_j^{cpu}, C_j^{ram}, P_{idle,j}, P_{max,j}, r_j)$~; chaque lien $(v_j,v_k)\in E$ par une latence $\ell_{jk}$ (ms) et une bande passante $\mathcal{B}_{jk}$ (Mbps) mesurées empiriquement. Notre cas d'étude GCP instancie ce modèle avec les VMs de la Table~\ref{tab:vms} selon la topologie de la Figure~\ref{fig:infra_gcp}.
 
 \begin{table}[t]
     \centering
@@ -146,6 +129,39 @@ Dans ce travail, nous instancions cette modélisation sur des VMs Google Compute
         \bottomrule
     \end{tabularx}
 \end{table}
+
+\begin{figure}[t]
+    \centering
+    \begin{tikzpicture}[
+        vm/.style={draw, rounded corners, fill=blue!10,
+            minimum width=2.45cm, minimum height=0.95cm,
+            font=\scriptsize, align=center},
+        nb/.style={draw, rounded corners, densely dashed, fill=gray!12,
+            minimum width=2.2cm, minimum height=0.9cm,
+            font=\scriptsize, align=center},
+        tier/.style={draw, rounded corners=4pt, densely dashed, inner sep=7pt},
+        lnk/.style={-, line width=0.6pt}
+    ]
+    \node[vm] (v0) at (0, 1.2) {$v_0$\\n2-standard-4\\4\,vCPU / 16\,Go\\{\tiny europe-west4-a}};
+    \node[vm] (v1) at (0, -1.8) {$v_1$\\e2-standard-2\\2\,vCPU / 8\,Go\\{\tiny europe-west9-a}};
+    \node[vm] (v2) at (-4.4, -5.0) {$\mathbf{v_2}$ [DZ]\\e2-medium\\2\,vCPU / 4\,Go\\{\tiny europe-west9-b}};
+    \node[vm] (v3) at (0, -5.0) {$v_3$\\e2-small\\1\,vCPU / 2\,Go\\{\tiny europe-west9-c}};
+    \node[vm] (v4) at (4.4, -5.0) {$v_4$\\e2-micro\\1\,vCPU / 1\,Go\\{\tiny europe-west9-a}};
+    \node[nb]  (nb) at (5.2, 1.3) {Storm~Nimbus\\e2-medium\\{\tiny europe-west9-a}};
+    \begin{scope}[on background layer]
+        \node[tier, fill=blue!4,  fit=(v0),
+              label=above:{\scriptsize\itshape Cloud -- europe-west4}] {};
+        \node[tier, fill=green!4, fit=(v1)(v2)(v3)(v4),
+              label=below:{\scriptsize\itshape Fog/Edge -- europe-west9}] {};
+    \end{scope}
+    \draw[lnk] (v0.south) -- node[font=\scriptsize, right, pos=0.52] {1\,Gbps / 40\,ms} (v1.north);
+    \draw[lnk] (v1.south west) -- node[font=\scriptsize, above left, pos=0.5] {500\,Mbps / 2\,ms} (v2.north);
+    \draw[lnk] (v1.south) -- node[font=\scriptsize, right, pos=0.5] {500\,Mbps / 2\,ms} (v3.north);
+    \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {500\,Mbps / 2\,ms} (v4.north);
+    \end{tikzpicture}
+    \caption{Topologie GCP en 2 tiers. $v_0$ (Cloud, ew4) est relié à $v_1$--$v_4$ (Fog/Edge, ew9) via 1\,Gbps/40\,ms~; liens intra-région à 500\,Mbps/2\,ms. $\mathbf{v_2}$ héberge $s_0$ (contrainte DZ). Storm~Nimbus est hors placement.}
+    \label{fig:infra_gcp}
+\end{figure}
 
 \subsection{Problème de placement}
 
@@ -229,41 +245,7 @@ L'heuristique FFD trie les composants par demande CPU décroissante et les place
 \subsection{LLM-as-Solver, Approche émergente}
 \label{subsec:llm}
 
-Nous utilisons deux LLM comme solveurs directs~:
-\begin{itemize}[nosep]
-    \item \textbf{GPT-4o}~: modèle commercial (API OpenAI), exécution distante.
-    \item \textbf{Llama~3 (8B)}~: modèle open-source exécuté localement via Ollama.
-\end{itemize}
-
-\subsubsection{Conception du prompt}
-
-Le LLM reçoit un prompt structuré contenant~: (i)~la description formelle de l'infrastructure (VMs, capacités, zones, latences), (ii)~le graphe applicatif (composants, besoins, flux), (iii)~les contraintes à respecter, et (iv)~le modèle énergétique avec l'instruction de proposer un placement qui minimise la consommation. Le prompt demande une réponse au format JSON strictement structuré~:
-
-\begin{verbatim}
-{
-  "placement": {
-    "s1": "v2",
-    "s2": "v2",
-    "s3": "v5",
-    "s4": "v5"
-  },
-  "reasoning": "..."
-}
-\end{verbatim}
-
-\subsubsection{Protocole de non-déterminisme}
-
-Les LLM étant non-déterministes, chaque instance est soumise $R = 10$ fois (température $\tau = 0$ pour GPT-4o, $\tau = 0.1$ pour Llama~3). Nous rapportons la solution médiane, le meilleur cas et la variance. Le prompt est identique pour tous les runs et tous les modèles (\emph{pas de cherry-picking}).
-
-\subsubsection{Coût du solveur}
-
-Un aspect original de notre évaluation est la mesure du \emph{coût de la décision de placement}~:
-\begin{itemize}[nosep]
-    \item \textbf{FFD~:} temps CPU local (millisecondes).
-    \item \textbf{CSP~:} temps CPU du solveur OR-Tools (millisecondes à secondes).
-    \item \textbf{GPT-4o~:} nombre de tokens (entrée + sortie), temps de réponse API, coût financier estimé (\$), et énergie d'inférence estimée via les facteurs de~\cite{luccioni2023power}.
-    \item \textbf{Llama~3 local~:} temps d'inférence, utilisation CPU/GPU, énergie mesurée localement (via \texttt{powermetrics} ou \texttt{nvidia-smi}).
-\end{itemize}
+Nous utilisons deux LLM comme solveurs directs~: \textbf{GPT-4o} (API OpenAI, exécution distante) et \textbf{Llama~3 8B} (Ollama, exécution locale). Le prompt fournit la description formelle de l'infrastructure, du graphe applicatif, des contraintes et du modèle énergétique, avec une sortie JSON strictement structurée. Pour tenir compte du non-déterminisme, chaque instance est soumise $R = 10$ fois (température $\tau = 0$ pour GPT-4o, $\tau = 0.1$ pour Llama~3) et nous rapportons solution médiane, meilleur cas et variance. Le coût du processus de résolution (temps, tokens et énergie d'inférence) est analysé en Section~\ref{sec:results} (Table~\ref{tab:solver_cost}).
 
 
 % ============================================================
@@ -274,30 +256,7 @@ Un aspect original de notre évaluation est la mesure du \emph{coût de la déci
 
 \subsection{Application et infrastructure}
 
-\paragraph{Application DSP.}
-Nous évaluons le placement d'un pipeline DSP à 4~composants communicants
-(Figure~\ref{fig:app_graph})~: $s_0$~(source, 1~vCPU, 1~Go~RAM, flux~400~req/s),
-$s_1$~(pré-traitement, 1~vCPU, 1~Go), $s_2$~(traitement, 2~vCPU, 2~Go),
-$s_3$~(agrégation, 2~vCPU, 2~Go). Chaque flux de communication est dimensionné à
-400~Mbps. Une contrainte de localité (\emph{DZ}) impose le placement de $s_0$ sur le
-nœud $v_2$ (zone \texttt{europe-west9-b}), simulant une source de données IoT
-territorialement contrainte.
-
-\paragraph{Infrastructure GCP.}
-L'infrastructure repose sur $N{=}5$~VMs Google Compute Engine de types
-hétérogènes (Table~\ref{tab:vms}), provisionnées comme instances préemptibles
-(\emph{SPOT}) via un automate de déploiement idempotent qui associe chaque profil
-(CPU,~RAM) à un type GCE, crée les règles réseau nécessaires, puis instancie les
-VMs à partir d'un fichier \texttt{.properties}. La topologie à deux niveaux couvre 2~régions et
-4~zones~: $v_0$ (\texttt{europe-west4-a}) constitue le niveau Cloud, $v_1$--$v_4$
-le niveau Fog/Edge dans \texttt{europe-west9}. Le lien $v_0$--$v_1$ est un lien
-inter-région 1~Gbps à 40~ms~; les liens $v_1$--$v_{2,3,4}$ sont des liens
-intra-région 500~Mbps à 2~ms. Un nœud dédié \texttt{storm-nimbus}
-(\texttt{e2-medium}, \texttt{europe-west9-a}) héberge Apache Storm~2.8.3
-(Nimbus\,+\,Zookeeper) sans participer au placement. Chaque VM~worker exécute un
-Storm Supervisor guidé par un planificateur CSV personnalisé
-(\texttt{CsvOneToOneScheduler}) qui lit le résultat de placement depuis
-\texttt{/etc/storm/placement.csv}.
+Le cas d'étude est le pipeline DSP $K{=}5$ et les $N{=}5$ VMs GCE SPOT décrits en Section~\ref{sec:model} (Figures~\ref{fig:app_graph}--\ref{fig:infra_gcp}). Les VMs sont provisionnées via un automate idempotent à partir d'un fichier \texttt{.properties}. Un nœud dédié \texttt{storm-nimbus} (\texttt{e2-medium}, \texttt{europe-west9-a}) héberge Apache Storm~2.8.4 (Nimbus\,+\,Zookeeper) \cite{toshniwal2014storm} hors du pool de placement~; les workers Storm Supervisor lisent le placement depuis \texttt{/etc/storm/placement.csv} (\texttt{CsvOneToOneScheduler}).
 
 \subsection{Paramètres énergétiques et algorithmiques}
 
@@ -383,17 +342,9 @@ ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metr
     \end{tabular}
 \end{table}
 
-\subsection{Passage à l'échelle}
+\subsection{Robustesse et coût du solveur}
 
-\todo{Varier le nombre de composants ($K = 3, 4, 5$) et/ou le nombre de VMs ($N = 5, 8, 10$). Montrer l'évolution du temps de résolution CSP vs.\ le coût LLM (tokens, latence API). Graphique attendu~: $T_{solve}$ en fonction de $K \times N$.}
-
-\subsection{Non-déterminisme du LLM}
-
-\todo{Sur les $R = 10$ runs, rapporter~: taux de placements valides, variance de $E_{total}$, cas où le LLM viole des contraintes (hallucination de VMs inexistantes, dépassement de capacité). Boîte à moustaches comparant GPT-4o vs Llama~3.}
-
-\subsection{Coût de la décision}
-
-\todo{Tableau comparant le coût du processus de résolution~:}
+\todo{Analyser conjointement le non-déterminisme et le coût de la décision~: sur les $R = 10$ runs, rapporter le taux de placements valides, la variance de $E_{total}$, les violations éventuelles de contraintes, ainsi que le temps, les tokens, le coût financier et $E_{solver}$ pour chaque approche.}
 
 \begin{table}[t]
     \centering
@@ -412,9 +363,9 @@ ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metr
     \end{tabular}
 \end{table}
 
-\subsection{Impact du workload}
+\subsection{Sensibilité à l'échelle et à la charge}
 
-\todo{Varier $\lambda$ et montrer comment le placement optimal change. Le CSP s'adapte-t-il mieux que FFD ? Le LLM capte-t-il l'impact de la charge sur l'énergie ?}
+\todo{Étudier conjointement l'effet de la taille de l'instance et du workload~: faire varier le nombre de composants ($K = 3, 4, 5$), le nombre de VMs ($N = 5, 8, 10$) et $\lambda$, puis montrer l'évolution du temps de résolution, du coût LLM et des placements obtenus.}
 
 
 % ============================================================
@@ -431,24 +382,9 @@ Les formulations à base de DVFS ($P \propto V_{dd}^2 \cdot f$) ne sont pas appl
 
 \todo{Discuter si un modèle réseau plus fin (énergie par octet transmis, énergie des switches) changerait le classement des solutions.}
 
-\subsection{Le LLM comme solveur~: où et quand~?}
+\subsection{LLM comme solveur et limites}
 
-\todo{Discuter les résultats en termes de~:}
-\begin{itemize}[nosep]
-    \item \emph{Fiabilité~:} Taux de solutions valides. Les LLM ``hallucinent-ils'' des VMs ou violent-ils des contraintes~?
-    \item \emph{Qualité~:} Écart par rapport à l'optimum CSP (gap en \%).
-    \item \emph{Rapport coût/qualité~:} Le LLM est-il justifié par la rapidité de prototypage même si sous-optimal~?
-    \item \emph{Scénarios favorables~:} Le LLM pourrait être utile pour un premier placement rapide (warm start) affineable par CSP, ou pour des instances où le CSP timeout.
-\end{itemize}
-
-\subsection{Limites}
-
-\begin{itemize}[nosep]
-    \item L'énergie est \emph{estimée} (modèle + SPECpower), pas mesurée directement (absence de wattmètre sur GCP).
-    \item L'infrastructure est de taille modeste ($K \leq 5$, $N \leq 5$)~; les conclusions sur le passage à l'échelle sont préliminaires.
-    \item Le prompt LLM est conçu manuellement~; l'ingénierie de prompt pourrait améliorer significativement les résultats.
-    \item Seule l'énergie opérationnelle est considérée~; l'énergie incorporée (fabrication, transport) n'est pas prise en compte.
-\end{itemize}
+\todo{Discuter les résultats en termes de fiabilité (taux de solutions valides, hallucinations éventuelles), de qualité (écart à l'optimum CSP), et de rapport coût/qualité. Préciser aussi les scénarios favorables (warm start, timeout du CSP) et les principales limites de l'étude~: énergie estimée et non mesurée, infrastructure modeste, prompt conçu manuellement, absence d'énergie incorporée.}
 
 
 % ============================================================
