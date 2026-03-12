@@ -204,6 +204,10 @@ task.heartbeat.frequency.secs: 1
 
 # Frequency that each executor emit a sample
 executor.metrics.frequency.secs: 1
+
+# Blacklist resume time (after a node is blacklisted, how long before it can be considered again)
+blacklist.scheduler.resume.time.secs: 60
+
 STORM_CONFIG
 
 chown storm:storm /usr/local/storm/conf/storm.yaml

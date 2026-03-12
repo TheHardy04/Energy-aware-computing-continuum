@@ -17,7 +17,7 @@ if [ $# -lt 3 ]; then
     echo "Usage: $0 <infra_properties_file> <app_properties_file> <mapping_csv_file>"
     echo ""
     echo "Example:"
-    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_4comps_GCP.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv"
+    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_5comps_GCP.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv"
     exit 1
 fi
 
