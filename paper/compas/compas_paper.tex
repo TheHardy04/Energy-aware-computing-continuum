@@ -233,6 +233,7 @@ Le cas d'étude exploite le pipeline DSP $K{=}5$ et les $N{=}5$ VMs GCE SPOT mod
 \subsection{Paramètres énergétiques et algorithmiques}
 
 Le modèle énergétique exploite les constantes : $\text{PUE}{=}1{,}10$, $P_{\text{idle}}{=}1{,}0$~W/vCPU, $P_{\text{max}}{=}8{,}0$~W/vCPU (issues des abaques SPECpower). L'énergie réseau est pondérée par un multiplicateur de tier (selon la latence) : $\times1{,}0$ (intra-zone), $\times1{,}5$ (inter-zone), $\times2{,}0$ (inter-région).
+Pour \textbf{GPT-4o}, le coût énergétique du solveur ($E_{solver}$) est estimé à partir du volume de tokens traités, selon l'approche de comptabilité énergétique de l'inférence proposée par Luccioni et al.~\cite{luccioni2023power}.
 \begin{itemize}[nosep]
     \item \textbf{FFD :} tri CPU décroissant, placement séquentiel conditionnel, et \emph{backtracking} sur la contrainte de latence.
     \item \textbf{CSP :} OR-Tools CP-SAT programmé pour minimiser formellement l'énergie GCP globale, avec exécution jusqu'à optimalité certifiée.

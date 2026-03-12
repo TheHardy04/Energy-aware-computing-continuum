@@ -2,6 +2,7 @@ import json
 import argparse
 import os
 import logging
+import time
 
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
@@ -14,6 +15,79 @@ from src.llmPlacement import LLMPlacement
 from src.resultExporter import ResultExporter
 from src.evaluation import Evaluator
 from mappingUnitTest import MappingUnitTest
+
+
+P_CPU_WATTS_DEFAULT = 45.0
+SOLVER_POWER_UNCERTAINTY = 0.20
+LLM_UNCERTAINTY_DEFAULT = 3.0
+
+# Wh per 1k tokens (input, output)
+LLM_TOKEN_ENERGY_WH_PER_1K = {
+    'anthropic': (0.0015, 0.0025),
+    'openai': (0.0015, 0.0025),
+    'gemini': (0.0010, 0.0020),
+}
+
+
+def _compute_solver_energy_meta(strategy_name: str, result_meta: dict, resolution_time_s: float) -> dict:
+    """Compute solver overhead energy and uncertainty band."""
+    p_cpu_w = float(os.environ.get('P_CPU_WATTS', str(P_CPU_WATTS_DEFAULT)))
+    provider = str(result_meta.get('provider', '') or '').lower()
+    tokens_in = int(result_meta.get('tokens_in') or 0)
+    tokens_out = int(result_meta.get('tokens_out') or 0)
+    llm_time_s = float(result_meta.get('llm_time') or 0.0)
+
+    # LLM cloud providers: token-energy model
+    if strategy_name == 'LLM' and provider in LLM_TOKEN_ENERGY_WH_PER_1K and (tokens_in > 0 or tokens_out > 0):
+        eps_in, eps_out = LLM_TOKEN_ENERGY_WH_PER_1K[provider]
+        e_solver_wh = eps_in * (tokens_in / 1000.0) + eps_out * (tokens_out / 1000.0)
+        unc = float(os.environ.get('LLM_SOLVER_UNCERTAINTY', str(LLM_UNCERTAINTY_DEFAULT)))
+        unc = max(1.0, unc)
+        e_solver_min_wh = e_solver_wh / unc
+        e_solver_max_wh = e_solver_wh * unc
+        model = 'llm_tokens'
+        details = {
+            'provider': provider,
+            'epsilon_in_wh_per_1k': eps_in,
+            'epsilon_out_wh_per_1k': eps_out,
+            'uncertainty_factor': unc,
+            'tokens_in': tokens_in,
+            'tokens_out': tokens_out,
+        }
+    # Ollama local: power-time model when inference runtime is known
+    elif strategy_name == 'LLM' and provider == 'ollama' and llm_time_s > 0:
+        e_solver_wh = p_cpu_w * llm_time_s / 3600.0
+        e_solver_min_wh = 0.8 * e_solver_wh
+        e_solver_max_wh = 1.2 * e_solver_wh
+        model = 'runtime_power'
+        details = {
+            'provider': provider,
+            'p_cpu_watts': p_cpu_w,
+            'runtime_s': llm_time_s,
+            'uncertainty_ratio': SOLVER_POWER_UNCERTAINTY,
+        }
+    # Fallback for CSP/Greedy or missing LLM token/runtime data: power-time model
+    else:
+        e_solver_wh = p_cpu_w * resolution_time_s / 3600.0
+        e_solver_min_wh = 0.8 * e_solver_wh
+        e_solver_max_wh = 1.2 * e_solver_wh
+        model = 'runtime_power'
+        details = {
+            'p_cpu_watts': p_cpu_w,
+            'runtime_s': resolution_time_s,
+            'uncertainty_ratio': SOLVER_POWER_UNCERTAINTY,
+        }
+
+    return {
+        'e_solver_wh': e_solver_wh,
+        'e_solver_min_wh': e_solver_min_wh,
+        'e_solver_max_wh': e_solver_max_wh,
+        'e_solver_j': e_solver_wh * 3600.0,
+        'e_solver_min_j': e_solver_min_wh * 3600.0,
+        'e_solver_max_j': e_solver_max_wh * 3600.0,
+        'solver_energy_model': model,
+        'solver_energy_details': details,
+    }
 
 
 
@@ -101,8 +175,19 @@ if __name__ == '__main__':
     elif args.strategy == 'GreedyFirstIterate':
         strategy = GreedyFirstIterate()
 
+    start_time = time.perf_counter()
     result = strategy.place(svc, net)
+    resolution_time_s = time.perf_counter() - start_time
+    result.meta['resolution_time_s'] = resolution_time_s
+    result.meta.update(_compute_solver_energy_meta(args.strategy, result.meta, resolution_time_s))
     logger.info("Placement finished. Status: %s", result.meta.get('status'))
+    logger.info("Placement resolution time: %.6f s", resolution_time_s)
+    logger.info(
+        "Solver overhead energy: %.6f Wh [%.6f, %.6f]",
+        float(result.meta.get('e_solver_wh') or 0.0),
+        float(result.meta.get('e_solver_min_wh') or 0.0),
+        float(result.meta.get('e_solver_max_wh') or 0.0),
+    )
 
     ## RESULTS
     if result.meta.get('status') == 'success':
@@ -123,6 +208,15 @@ if __name__ == '__main__':
             print(json.dumps(pretty, indent=2))
         else:
             print('Details:', json.dumps(result.meta, indent=2))
+        print(f"Resolution time: {resolution_time_s:.6f} s")
+        print(
+            f"Solver overhead energy: {float(result.meta.get('e_solver_wh') or 0.0):.6f} Wh "
+            f"[{float(result.meta.get('e_solver_min_wh') or 0.0):.6f}, {float(result.meta.get('e_solver_max_wh') or 0.0):.6f}]"
+        )
+        print(
+            f"Solver overhead energy: {float(result.meta.get('e_solver_j') or 0.0):.2f} J "
+            f"[{float(result.meta.get('e_solver_min_j') or 0.0):.2f}, {float(result.meta.get('e_solver_max_j') or 0.0):.2f}]"
+        )
         
         if 'host_res' in result.meta:
             print('Final host resources:')

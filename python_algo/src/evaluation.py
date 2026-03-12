@@ -33,6 +33,13 @@ class EvaluationMetrics:
     active_hosts_count: int
     host_cpu_usage: Dict[int, int]
     host_ram_usage: Dict[int, int]
+    solver_energy_wh: float
+    solver_energy_min_wh: float
+    solver_energy_max_wh: float
+    solver_energy_j: float
+    solver_energy_min_j: float
+    solver_energy_max_j: float
+    solver_energy_model: str
     violations: List[str]
 
 
@@ -162,6 +169,13 @@ class Evaluator:
             active_hosts_count=len(active_hosts),
             host_cpu_usage=host_cpu_used,
             host_ram_usage=host_ram_used,
+            solver_energy_wh=float(placement.meta.get('e_solver_wh') or 0.0),
+            solver_energy_min_wh=float(placement.meta.get('e_solver_min_wh') or 0.0),
+            solver_energy_max_wh=float(placement.meta.get('e_solver_max_wh') or 0.0),
+            solver_energy_j=float(placement.meta.get('e_solver_j') or 0.0),
+            solver_energy_min_j=float(placement.meta.get('e_solver_min_j') or 0.0),
+            solver_energy_max_j=float(placement.meta.get('e_solver_max_j') or 0.0),
+            solver_energy_model=str(placement.meta.get('solver_energy_model') or 'unknown'),
             violations=violations
         )
         if verbose:
@@ -183,6 +197,15 @@ class Evaluator:
         print(f"  Worst Latency: {metrics.worst_latency:.2f}")
         print(f"  Total Latency: {metrics.total_latency:.2f}")
         print(f"  Active Hosts: {metrics.active_hosts_count}")
+        print(
+            f"  Solver Overhead Energy ({metrics.solver_energy_model}): "
+            f"{metrics.solver_energy_wh:.6f} Wh "
+            f"[{metrics.solver_energy_min_wh:.6f}, {metrics.solver_energy_max_wh:.6f}]"
+        )
+        print(
+            f"  Solver Overhead Energy: {metrics.solver_energy_j:.2f} J "
+            f"[{metrics.solver_energy_min_j:.2f}, {metrics.solver_energy_max_j:.2f}]"
+        )
         print("  Host CPU Usage:")
         for h, cpu in metrics.host_cpu_usage.items():
             print(f"    Host {h}: CPU used = {cpu}")
