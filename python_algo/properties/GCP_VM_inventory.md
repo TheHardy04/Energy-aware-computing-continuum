@@ -6,11 +6,13 @@
 | 2       | worker-edge-1 | Heavy Edge        | e2-medium        | 2   | 4000     | europe-west9 | europe-west9-b |
 | 3       | worker-edge-2 | Light Edge        | e2-small         | 1   | 2000     | europe-west9 | europe-west9-c |
 | 4       | worker-iot-1  | Deep Edge         | e2-micro         | 1   | 1000     | europe-west9 | europe-west9-a |
+|||||||||
 | 5       | fog-gateway-2 | Regional Router 2 | e2-standard-2    | 2   | 8000     | europe-west4 | europe-west4-a |
 | 6       | worker-edge-3 | Heavy Edge        | e2-medium        | 2   | 4000     | europe-north2 | europe-north2-a |
 | 7       | worker-edge-4 | Light Edge        | e2-small         | 1   | 2000     | europe-north2 | europe-north2-b |
 | 8       | worker-iot-2  | Deep Edge         | e2-micro         | 1   | 1000     | europe-north2 | europe-north2-c |
-| 9       | worker-iot-3  | Deep Edge         | e2-micro         | 1   | 1000     | europe-north2 | europe-north2-a |
+| 9       | worker-iot-3  | Deep Edge         | e2-qmicro         | 1   | 1000     | europe-north2 | europe-north2-a |
+|||||||||
 | 10      | cloud-core-2  | Cloud Region 2    | n2-standard-4    | 4   | 16000    | northamerica-northeast1 | northamerica-northeast1-a |
 | 11      | fog-gateway-3 | Regional Router 3 | e2-standard-2    | 2   | 8000     | northamerica-northeast1 | northamerica-northeast1-b |
 | 12      | fog-gateway-4 | Regional Router 4 | e2-medium        | 2   | 4000     | northamerica-northeast1 | northamerica-northeast1-c |
