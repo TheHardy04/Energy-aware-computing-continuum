@@ -293,6 +293,72 @@ public class TopologyFromProperties {
         return constraints;
     }
 
+    private static int getPositiveIntProperty(Properties props, String key, int defaultValue) {
+        String raw = props.getProperty(key);
+        if (raw == null || raw.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(raw.trim());
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException ex) {
+            System.out.println("Warning: invalid integer for property '" + key + "' = '" + raw +
+                    "'. Using default " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private static int getNonNegativeIntProperty(Properties props, String key, int defaultValue) {
+        String raw = props.getProperty(key);
+        if (raw == null || raw.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(raw.trim());
+            return parsed >= 0 ? parsed : defaultValue;
+        } catch (NumberFormatException ex) {
+            System.out.println("Warning: invalid integer for property '" + key + "' = '" + raw +
+                    "'. Using default " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private static int resolveComponentParallelism(Properties props, int componentId, int defaultParallelism) {
+        String[] keys = new String[] {
+                "component." + componentId + ".parallelism",
+                "component.parallelism." + componentId
+        };
+        for (String key : keys) {
+            String raw = props.getProperty(key);
+            if (raw == null || raw.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                int parsed = Integer.parseInt(raw.trim());
+                if (parsed > 0) {
+                    return parsed;
+                }
+            } catch (NumberFormatException ignored) {
+                // Fall through to the default and keep the warning concise at startup.
+            }
+            System.out.println("Warning: invalid parallelism for property '" + key + "' = '" + raw +
+                    "'. Using default " + defaultParallelism);
+            return defaultParallelism;
+        }
+        return defaultParallelism;
+    }
+
+    private static int computeCpuBurnMillis(Component comp, int msPerCpuUnit, int muReference) {
+        // Base burn derives directly from component CPU requirement.
+        double baseMillis = Math.max(comp.cpu, 1) * (double) msPerCpuUnit;
+
+        // Fix mu semantics: higher mu means faster processing, so lower per-tuple burn.
+        double normalizedMu = Math.max(comp.mu, 1);
+        double muFactor = Math.max(muReference, 1) / normalizedMu;
+
+        return Math.max(1, (int) Math.round(baseMillis * muFactor));
+    }
+
     // -------------------- MAIN --------------------
     public static void main(String[] args) throws Exception {
         if (args == null || args.length < 1) {
@@ -312,7 +378,24 @@ public class TopologyFromProperties {
         List<Component> components = parseComponents(props);
         List<Link> links = parseLinks(props);
 
+        int workers = getPositiveIntProperty(props, "topology.workers", 3);
+        int ackers = getNonNegativeIntProperty(props, "topology.ackers", 0);
+        int defaultParallelism = getPositiveIntProperty(props, "component.parallelism.default", 1);
+        int spoutParallelism = getPositiveIntProperty(props, "spout.parallelism", defaultParallelism);
+        int burnMsPerCpuUnit = getPositiveIntProperty(props, "cpu.burn.ms.per.cpu", 20);
+        int muReference = getPositiveIntProperty(props, "mu.reference", 400);
+
         System.out.println("Building topology with " + components.size() + " components and " + links.size() + " links");
+        System.out.println("Topology config: workers=" + workers +
+            ", ackers=" + ackers +
+            ", defaultParallelism=" + defaultParallelism +
+            ", spoutParallelism=" + spoutParallelism +
+            ", cpuBurnMsPerCpu=" + burnMsPerCpuUnit +
+            ", muReference=" + muReference);
+        if (componentsCount > 0 && componentsCount != components.size()) {
+            System.out.println("Warning: application.components=" + componentsCount +
+                " but parsed " + components.size() + " component tuples.");
+        }
 
         // Build topology
         TopologyBuilder builder = new TopologyBuilder();
@@ -337,24 +420,28 @@ public class TopologyFromProperties {
 
         // Create spout for source component
         Component sourceComp = components.get(sourceComponentId);
+        int sourceParallelism = resolveComponentParallelism(props, sourceComponentId, spoutParallelism);
         builder.setSpout("component_" + sourceComponentId,
-                         new DataSourceSpout(sourceComp.lambda), 1);
+                 new DataSourceSpout(sourceComp.lambda), sourceParallelism);
 
-        System.out.println("Created spout: component_" + sourceComponentId + " (lambda=" + sourceComp.lambda + ")");
+        System.out.println("Created spout: component_" + sourceComponentId +
+            " (lambda=" + sourceComp.lambda + ", parallelism=" + sourceParallelism + ")");
 
         // Create bolts for other components (without connections yet)
         Map<String, org.apache.storm.topology.BoltDeclarer> boltDeclarers = new HashMap<>();
         for (Component comp : components) {
             if (comp.id != sourceComponentId) {
-                // Calculate CPU work based on processing rate (mu)
-                // Higher mu = more processing = more CPU work
-                int cpuMillis = Math.max(1, 1000 / Math.max(comp.mu, 100));
+                int cpuMillis = computeCpuBurnMillis(comp, burnMsPerCpuUnit, muReference);
+                int boltParallelism = resolveComponentParallelism(props, comp.id, defaultParallelism);
                 String boltName = "component_" + comp.id;
                 org.apache.storm.topology.BoltDeclarer declarer =
-                    builder.setBolt(boltName, new ProcessingBolt(comp.id, cpuMillis, comp.mu), 1);
+                    builder.setBolt(boltName, new ProcessingBolt(comp.id, cpuMillis, comp.mu), boltParallelism);
                 boltDeclarers.put(boltName, declarer);
                 System.out.println("Created bolt: " + boltName +
-                                 " (cpu=" + comp.cpu + ", mu=" + comp.mu + ", cpuMillis=" + cpuMillis + ")");
+                                 " (cpu=" + comp.cpu +
+                                 ", mu=" + comp.mu +
+                                 ", cpuMillis=" + cpuMillis +
+                                 ", parallelism=" + boltParallelism + ")");
             }
         }
 
@@ -375,8 +462,8 @@ public class TopologyFromProperties {
         // Apply placement constraints (using component configuration)
         Config conf = new Config();
         conf.setDebug(false);
-        conf.setNumWorkers(3);
-        conf.setNumAckers(0);
+        conf.setNumWorkers(workers);
+        conf.setNumAckers(ackers);
 
         // Submit topology
         System.out.println("\nSubmitting topology: " + topologyName);
