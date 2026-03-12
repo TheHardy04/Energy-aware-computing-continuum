@@ -73,6 +73,9 @@ public class CsvOneToOneScheduler implements IScheduler {
         Map<String, List<ExecutorDetails>> needs =
                 new HashMap<>(cluster.getNeedsSchedulingComponentToExecutors(topology));
 
+        LOG.debug("Needs-scheduling components for topology {}: {}", topology.getName(), needs.keySet());
+        LOG.debug("Placement keys loaded from CSV: {}", placement.keySet());
+
         if (needs.isEmpty()) {
             LOG.info("Nothing to schedule for topology {}", topology.getName());
             return;
@@ -174,17 +177,49 @@ public class CsvOneToOneScheduler implements IScheduler {
                                       Map<String, List<ExecutorDetails>> hostToExecs,
                                       Map<String, List<String>> hostToComponents) {
         for (Map.Entry<String, String> rule : placement.entrySet()) {
-            String component = rule.getKey();
+            String placementComponent = rule.getKey();
             String hostOrId = rule.getValue();
 
-            List<ExecutorDetails> execs = needs.get(component);
+            String needsComponent = resolveNeedsComponentKey(placementComponent, needs);
+            if (needsComponent == null) {
+                LOG.debug("Placement rule '{}' -> '{}' does not match any needs-scheduling component. Available components: {}",
+                        placementComponent, hostOrId, needs.keySet());
+                continue;
+            }
+
+            List<ExecutorDetails> execs = needs.get(needsComponent);
             if (execs == null || execs.isEmpty()) {
                 continue; // component not in this topology or already scheduled
             }
 
             hostToExecs.computeIfAbsent(hostOrId, k -> new ArrayList<>()).addAll(execs);
-            hostToComponents.computeIfAbsent(hostOrId, k -> new ArrayList<>()).add(component);
+            hostToComponents.computeIfAbsent(hostOrId, k -> new ArrayList<>()).add(needsComponent);
         }
+    }
+
+    private String resolveNeedsComponentKey(String placementComponent, Map<String, List<ExecutorDetails>> needs) {
+        // 1) Exact match
+        if (needs.containsKey(placementComponent)) {
+            return placementComponent;
+        }
+
+        // 2) Numeric in CSV -> component_X in topology
+        if (placementComponent.matches("\\d+")) {
+            String prefixed = "component_" + placementComponent;
+            if (needs.containsKey(prefixed)) {
+                return prefixed;
+            }
+        }
+
+        // 3) component_X in CSV -> numeric X in topology
+        if (placementComponent.startsWith("component_")) {
+            String numeric = placementComponent.substring("component_".length());
+            if (needs.containsKey(numeric)) {
+                return numeric;
+            }
+        }
+
+        return null;
     }
 
     private Set<WorkerSlot> assignExecutorsFromCsv(Cluster cluster, TopologyDetails topology,

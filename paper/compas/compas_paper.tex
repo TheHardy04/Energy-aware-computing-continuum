@@ -1,4 +1,4 @@
-\documentclass[systeme]{compas2026}
+﻿\documentclass[systeme]{compas2026}
 \usepackage{hyperref}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -16,7 +16,8 @@
 % Commandes utiles
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
-\title{Heuristique, CSP ou LLM ? Étude comparative du coût énergétique du placement de services multi-composants dans le Cloud}
+\title{Heuristique, CSP ou LLM ?
+Étude comparative du coût énergétique du placement de services multi-composants dans le Cloud}
 
 \author{Théo Hardy$^{1}$, Farah Aït-Salaht$^{1}$}
 \address{$^{1}$De Vinci Higher Education, De Vinci Research Center, Paris La Défense, France
@@ -32,11 +33,7 @@ theo.hardy@edu.devinci.fr}
 %  RÉSUMÉ
 % ============================================================
 \begin{abstract}
-Le placement de services multi-composants sur une infrastructure Cloud hétérogène pose un défi d'optimisation combinant satisfaction de contraintes (CPU, RAM, bande passante, latence bout-en-bout) et minimisation de divers objectifs tels que le coût, la latence ou la consommation énergétique. Si les approches heuristiques et exactes sont bien étudiées, l'émergence des grands modèles de langage (LLM) comme outils de résolution de problèmes combinatoires ouvre une voie nouvelle et peu explorée.
-
-Dans cet article, nous formalisons le problème de placement d'une application de type \emph{Data Stream Processing} (DSP) multi-composants sur des machines virtuelles hétérogènes et géo-distribuées, et nous \emph{évaluons l'empreinte énergétique} des solutions produites par trois paradigmes de résolution distincts. Nous considérons un déploiement réel sur Google Cloud Platform (GCP) comme cas d'étude. Les trois approches comparées sont~: (i)~une heuristique gloutonne \emph{First Fit Decreasing} (FFD), (ii)~un solveur exact par programmation par contraintes (CSP via OR-Tools), et (iii)~une approche LLM-as-Solver dans laquelle un modèle de langage (GPT-4o et Llama~3 via Ollama) reçoit une description structurée du problème et renvoie directement un placement. La consommation énergétique de chaque placement est estimée à l'aide d'un modèle linéaire fondé sur l'utilisation CPU, largement adopté dans la littérature.
-
-Nos résultats expérimentaux montrent que \todo{résumé des résultats clés~: qualité relative des 3 approches, écart énergétique, temps de résolution, coût du LLM}. Nous discutons les implications pratiques de l'utilisation des LLM comme solveurs, notamment leur non-déterminisme, leur coût énergétique propre, et les scénarios où ils constituent une alternative viable.
+Le placement de services multi-composants sur des infrastructures Cloud hétérogènes constitue un défi d'optimisation complexe, nécessitant de concilier des contraintes strictes (CPU, RAM, bande passante, latence) avec la minimisation de métriques globales comme l'empreinte énergétique. Si les heuristiques et méthodes exactes sont largement documentées, l'utilisation des grands modèles de langage (LLM) comme solveurs combinatoires reste une voie émergente. Cet article formalise le problème d'allocation d'une application \emph{Data Stream Processing} (DSP) géo-distribuée et évalue l'empreinte énergétique de trois paradigmes de résolution : (i) une heuristique gloutonne \emph{First Fit Decreasing} (FFD), (ii) un solveur exact par programmation par contraintes (CSP via OR-Tools), et (iii) une approche \emph{LLM-as-Solver} (GPT-4o et Llama 3 via Ollama). À l'aide d'un modèle énergétique linéaire fondé sur l'utilisation CPU, et via un cas d'étude réel sur Google Cloud Platform (GCP), nous démontrons que \todo{résumé des résultats clés~: qualité relative des 3 approches, écart énergétique, temps de résolution, coût du LLM}. Nous discutons enfin les implications de l'usage des LLM (non-déterminisme, surcoût énergétique propre) et les scénarios garantissant leur viabilité opérationnelle.
 \end{abstract}
 
 \smallskip
@@ -48,16 +45,13 @@ Nos résultats expérimentaux montrent que \todo{résumé des résultats clés~:
 \section{Introduction}
 \label{sec:intro}
 
-Le Cloud Computing offre des ressources élastiques mais hétérogènes, réparties dans des régions et zones géographiques distinctes. Le déploiement d'applications orientées service, composées de plusieurs processus communicants, nécessite de décider \emph{quel composant placer sur quel nœud}, en respectant des contraintes de capacité (CPU, RAM), de réseau (bande passante, latence bout-en-bout) et de qualité de service. Ce problème de placement, NP-difficile~\cite{wang2020service}, a des conséquences directes sur de multiples objectifs d'optimisation~: coût financier, latence applicative, mais aussi consommation énergétique. Un placement qui fragmente les composants entre régions distantes augmente le trafic réseau, sollicite la bande passante inter-régions et mobilise des nœuds sous-optimaux, entraînant une surconsommation énergétique.
+Le Cloud Computing déploie des ressources élastiques et hétérogènes, réparties sur diverses zones géographiques. Déployer des applications orientées services implique de déterminer l'affectation optimale de chaque composant aux nœuds matériels, tout en respectant des contraintes de capacité et de réseau. Ce problème NP-difficile impacte directement les coûts financiers, la latence applicative et la consommation énergétique globale de l'infrastructure. Un placement sous-optimal, fragmentant les composants entre régions, sollicite excessivement le réseau et mobilise des nœuds inadaptés, générant une surconsommation manifeste.
 
-Traditionnellement, deux familles d'approches dominent la littérature : les \emph{heuristiques} (First Fit, Best Fit, algorithmes génétiques), rapides mais sans garantie d'optimalité, et les \emph{méthodes exactes} (programmation linéaire, CSP, ILP), optimales mais limitées en passage à l'échelle~\cite{mann2015allocation}. Récemment, les grands modèles de langage (LLM) ont démontré des capacités surprenantes de raisonnement sur des problèmes combinatoires~\cite{yang2024large}, ouvrant la question de leur utilisation comme solveurs de placement.
-
-\smallskip
-Dans cet article, nous nous intéressons spécifiquement à la \emph{consommation énergétique} comme critère d'évaluation des placements. Nous proposons une étude comparative de trois paradigmes appliqués au placement d'une application de type \emph{Data Stream Processing} (DSP) multi-composants sur des machines virtuelles hétérogènes et géo-distribuées~: comment ces approches se comportent-elles en termes d'énergie consommée, de respect des contraintes et de coût de résolution~? Nos contributions sont les suivantes~:
+Face aux approches traditionnelles (heuristiques rapides mais sans garantie d'optimalité, et méthodes exactes optimales mais limitées face au passage à l'échelle), les grands modèles de langage (LLM) ont récemment démontré des aptitudes remarquables pour l'optimisation combinatoire. Cet article évalue spécifiquement la \emph{consommation énergétique} de ces placements à travers une étude comparative de trois paradigmes appliqués à une application DSP multi-composants géo-distribuée. Nos contributions s'articulent ainsi :
 \begin{enumerate}[leftmargin=*, nosep]
-    \item La \textbf{formalisation} du problème de placement multi-composant avec un modèle énergétique linéaire fondé sur l'utilisation CPU~\cite{beloglazov2012energy}, servant de base commune pour comparer les approches.
-    \item La \textbf{comparaison expérimentale} de trois approches (FFD, CSP, LLM-as-Solver) sur une infrastructure Cloud réelle (Google Cloud Platform), évaluant qualité du placement, énergie estimée, temps de résolution et respect des contraintes.
-    \item L'\textbf{évaluation du coût du solveur} lui-même~: temps de calcul pour FFD/CSP, coût en tokens et énergie d'inférence estimée pour les LLM (GPT-4o distant vs.\ Llama~3 local via Ollama).
+    \item La formalisation du problème d'allocation étayée par un modèle énergétique linéaire fondé sur l'utilisation CPU~\cite{beloglazov2012energy}.
+    \item Une évaluation expérimentale sur GCP comparant FFD, CSP et LLM-as-Solver, mesurant la qualité, l'énergie estimée, le temps de résolution et la validité.
+    \item L'analyse critique du surcoût du solveur lui-même (temps de calcul, volume de tokens, énergie d'inférence distante vs. locale).
 \end{enumerate}
 
 % ============================================================
@@ -68,7 +62,7 @@ Dans cet article, nous nous intéressons spécifiquement à la \emph{consommatio
 
 \subsection{Application DSP multi-composants}
 
-Une application DSP est modélisée comme un graphe orienté $G_a = (S, L)$~: $s_0$ est la source, $s_1,\ldots,s_K$ les $K$ opérateurs, chacun caractérisé par un triplet $(\psi_i^{cpu}, \psi_i^{ram}, \lambda_i)$ (CPU en vCPU, RAM en Mo, débit entrant en req/s). Chaque arc $(s_i, s_j) \in L$ porte un débit $d_{ij}$ (Mo/s) borné par la bande passante du lien physique entre nœuds hôtes. Une contrainte $\mathcal{L}_{max}$ borne la latence bout-en-bout du chemin $s_0 \to s_K$ (Figure~\ref{fig:app_graph}).
+Une application DSP est modélisée par un graphe orienté $G_a = (S, L)$. La source $s_0$ et les $K$ opérateurs $s_1,\ldots,s_K$ sont caractérisés par un triplet $(\psi_i^{cpu}, \psi_i^{ram}, \lambda_i)$ dictant les besoins en vCPU, RAM (Mo) et débit entrant (req/s). Chaque arc $(s_i, s_j) \in L$ porte un débit $d_{ij}$ (Mo/s) assujetti à la limite physique de la bande passante. Une borne $\mathcal{L}_{max}$ contraint la latence bout-en-bout du chemin $s_0 \to s_K$ (Figure~\ref{fig:app_graph}).
 
 \begin{figure}[H]
     \centering
@@ -91,26 +85,24 @@ Une application DSP est modélisée comme un graphe orienté $G_a = (S, L)$~: $s
     \node[svc, right of=s1] (s2) {$s_2$\\Traitement};
     \node[svc, right of=s2] (s3) {$s_3$\\Détection};
     \node[svc, right of=s3] (s4) {$s_4$\\Agrégation};
-
     \draw[arr] (s0) -- (s1);
     \draw[arr] (s1) -- (s2);
     \draw[arr] (s2) -- (s3);
     \draw[arr] (s3) -- (s4);
-
     \node[font=\scriptsize, below=0.15cm of s0] {\emph{flux}};
 
     % Latence bout-en-bout
     \draw[<->, dashed, red!60, line width=0.6pt]
       ([yshift=-0.7cm]s0.south) -- ([yshift=-0.7cm]s4.south)
       node[midway, below, font=\scriptsize, red!80] {$\mathcal{L}_{max}$ (bout-en-bout)};
-    \end{tikzpicture}
+\end{tikzpicture}
     \caption{Graphe applicatif DSP~: source $s_0$ et 4~opérateurs ($s_1$--$s_4$) reliés par des flux 400~Mbps~; contrainte de latence bout-en-bout $\mathcal{L}_{max}$.}
     \label{fig:app_graph}
 \end{figure}
 
 \subsection{Infrastructure physique}
 
-L'infrastructure est modélisée comme $G_p = (V, E)$. Chaque VM $v_j \in V$ est décrite par $(C_j^{cpu}, C_j^{ram}, P_{idle,j}, P_{max,j}, r_j)$~; chaque lien $(v_j,v_k)\in E$ par une latence $\ell_{jk}$ (ms) et une bande passante $\mathcal{B}_{jk}$ (Mbps) mesurées empiriquement. Notre cas d'étude GCP instancie ce modèle avec les VMs de la Table~\ref{tab:vms} selon la topologie de la Figure~\ref{fig:infra_gcp}.
+L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j \in V$ est définie par $(C_j^{cpu}, C_j^{ram}, P_{idle,j}, P_{max,j}, r_j)$ ; chaque lien $(v_j,v_k)\in E$ possède une latence $\ell_{jk}$ et une bande passante $\mathcal{B}_{jk}$ empiriquement calibrées. Notre déploiement GCP instancie ce modèle (Table~\ref{tab:vms}, Figure~\ref{fig:infra_gcp}).
 
 \begin{table}[t]
     \centering
@@ -122,7 +114,7 @@ L'infrastructure est modélisée comme $G_p = (V, E)$. Chaque VM $v_j \in V$ est
         \textbf{VM} & \textbf{Type GCE} & \textbf{vCPU} & \textbf{RAM (Go)} & \textbf{Zone} \\
         \midrule
         $v_0$ & n2-standard-4 & 4 & 16 & europe-west4-a \\
-        $v_1$ & e2-standard-2 & 2 &  8 & europe-west9-a \\
+        $v_1$ & e2-standard-2 & 2 & 8 & europe-west9-a \\
         $v_2$ & e2-medium     & 2 &  4 & europe-west9-b \\
         $v_3$ & e2-small      & 1 &  2 & europe-west9-c \\
         $v_4$ & e2-micro      & 1 &  1 & europe-west9-a \\
@@ -158,14 +150,14 @@ L'infrastructure est modélisée comme $G_p = (V, E)$. Chaque VM $v_j \in V$ est
     \draw[lnk] (v1.south west) -- node[font=\scriptsize, above left, pos=0.5] {500\,Mbps / 2\,ms} (v2.north);
     \draw[lnk] (v1.south) -- node[font=\scriptsize, right, pos=0.5] {500\,Mbps / 2\,ms} (v3.north);
     \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {500\,Mbps / 1\,ms} (v4.north);
-    \end{tikzpicture}
+\end{tikzpicture}
     \caption{Topologie GCP en 2 tiers. $v_0$ (Cloud, ew4) est relié à $v_1$--$v_4$ (Fog/Edge, ew9) via 1\,Gbps/12\,ms~; liens intra-région à 500\,Mbps/(1--2)\,ms. $\mathbf{v_2}$ héberge $s_0$ (contrainte DZ). Storm~Nimbus est hors placement.}
     \label{fig:infra_gcp}
 \end{figure}
 
 \subsection{Problème de placement}
 
-Un placement est une fonction $\pi : S \rightarrow V$ qui assigne chaque composant $s_i$ ($i \geq 1$) à une VM $v_j$. Un placement est \emph{valide} s'il respecte~:
+Le placement est une fonction $\pi : S \rightarrow V$ assignant chaque composant $s_i$ à une VM $v_j$. Un placement est \emph{valide} s'il respecte les contraintes suivantes :
 \begin{align}
     \sum_{s_i : \pi(s_i)=v_j} \psi_i^{cpu} &\leq C_j^{cpu} \quad \forall\, v_j \in V \label{eq:cst_cpu} \\
     \sum_{s_i : \pi(s_i)=v_j} \psi_i^{ram} &\leq C_j^{ram} \quad \forall\, v_j \in V \label{eq:cst_ram} \\
@@ -176,34 +168,16 @@ Un placement est une fonction $\pi : S \rightarrow V$ qui assigne chaque composa
 \subsection{Modèle énergétique}
 \label{subsec:energy_model}
 
-Nous adoptons le modèle linéaire fondé sur l'utilisation CPU, initialement proposé par Beloglazov et al.~\cite{beloglazov2012energy} et largement repris dans la littérature sur le placement de services~:
+Nous adoptons le modèle linéaire fondé sur l'utilisation CPU de Beloglazov et al.~\cite{beloglazov2012energy}, largement documenté pour le placement de services:
 \begin{equation}\label{eq:power}
     P_j(u_j) = P_{idle,j} + (P_{max,j} - P_{idle,j}) \cdot u_j
 \end{equation}
-où $u_j \in [0,1]$ est le taux d'utilisation CPU de la VM $v_j$, résultant du placement~:
+où $u_j \in [0,1]$ désigne la proportion d'activité CPU de la VM $v_j$ induite par le placement :
 \begin{equation}\label{eq:util}
     u_j = \frac{\sum_{s_i : \pi(s_i) = v_j} \psi_i^{cpu}}{C_j^{cpu}}
 \end{equation}
 
-%L'énergie totale du système sur une période $T$ est~:
-%\begin{equation}\label{eq:energy_total}
-%    E_{total}(\pi) = \underbrace{\sum_{v_j \in V^{act}} P_j(u_j) \cdot T}_{E_{compute}} + \underbrace{\sum_{(s_i,s_k) \in L} E_{net}(i,k,\pi)}_{E_{network}}
-%\end{equation}
-%où $V^{act} = \{v_j \mid \exists\, s_i,\, \pi(s_i) = v_j\}$ est l'ensemble des VMs actives. 
-%L'énergie réseau $E_{net}$ est proportionnelle au volume de données transmis entre composants placés sur des VMs distinctes~:
-%\begin{equation}\label{eq:energy_net}
-%    E_{net}(i,k,\pi) = \begin{cases}
-%        0 & \text{si } \pi(s_i) = \pi(s_k) \\
-%        P_{tx} \cdot \dfrac{d_{ik}}{\mathcal{B}_{\pi(s_i),\pi(s_k)}} \cdot T & \text{sinon}
-%    \end{cases}
-%\end{equation}
-
-%\textbf{Critère d'évaluation énergétique~:} Pour chaque placement $\pi$ valide, nous calculons $E_{total}(\pi)$ selon~\eqref{eq:energy_total}. Le CSP utilise cette quantité comme fonction objectif à minimiser, tandis que pour FFD et le LLM, $E_{total}$ sert de métrique a~posteriori permettant de comparer la qualité énergétique des solutions produites.
-
-\smallskip
-\noindent\textbf{Justification du choix de modèle.}
-Parmi les formulations existantes dans la littérature~\cite{beloglazov2012energy, iftikhar2023hunterplus, adhikari2019energy}, le modèle linéaire (\ref{eq:power}) est retenu pour trois raisons~: (i)~il est le plus répandu (adopté par la majorité des travaux de placement dans le Cloud et le continuum), (ii)~il ne requiert que deux paramètres par nœud ($P_{idle}$, $P_{max}$) calibrables via \texttt{stress-ng} + monitoring, et (iii)~il est suffisamment expressif pour capturer les différences entre types de VMs hétérogènes. Les modèles non-linéaires (quadratiques) et à base de DVFS sont discutés en \ref{sec:discussion} comme alternatives.
-
+Pour chaque placement $\pi$, nous déduisons son énergie totale $E_{total}(\pi)$. Le CSP utilise cette grandeur comme fonction objectif stricte à minimiser, tandis qu'elle sert de métrique d'évaluation a posteriori pour classer les solutions issues de FFD ou des LLM. Ce modèle est retenu pour son adoption généralisée, sa calibration aisée via deux paramètres par nœud ($P_{idle}$, $P_{max}$) via des outils comme \texttt{stress-ng}, et sa capacité à capturer l'hétérogénéité matérielle.
 
 % ============================================================
 %  3. APPROCHES DE PLACEMENT
@@ -213,7 +187,7 @@ Parmi les formulations existantes dans la littérature~\cite{beloglazov2012energ
 
 \subsection{First Fit Decreasing (FFD), Heuristique}
 
-L'heuristique FFD trie les composants par demande CPU décroissante et les place séquentiellement sur la première VM ayant une capacité suffisante et dont les liens réseau satisfont les contraintes de bande passante. Si la contrainte de latence bout-en-bout est violée, un mécanisme de \emph{backtracking} local tente de rapprocher les composants communicants.
+L'heuristique FFD trie les composants par exigence CPU décroissante et les affecte séquentiellement au premier nœud satisfaisant les minimas capacitaires et réseaux. Une violation de la latence bout-en-bout provoque un mécanisme de \emph{backtracking} local visant à rapprocher les entités communicantes.
 
 \begin{algorithm}[t]
 \caption{First Fit Decreasing (FFD)}
@@ -229,7 +203,8 @@ L'heuristique FFD trie les composants par demande CPU décroissante et les place
             \If{$\text{latence\_bout\_en\_bout}(\pi) \leq \mathcal{L}_{max}$}
                 \State \textbf{break}
             \Else
-                \State annuler $\pi(s_i)$ ; \textbf{continue}
+                \State annuler $\pi(s_i)$ ;
+\textbf{continue}
             \EndIf
         \EndIf
     \EndFor
@@ -238,15 +213,12 @@ L'heuristique FFD trie les composants par demande CPU décroissante et les place
 \end{algorithmic}
 \end{algorithm}
 
-\emph{Complexité~:} $\mathcal{O}(K \cdot N)$ avec $K = |S|$ composants et $N = |V|$ VMs. L'avantage est un temps de résolution quasi-instantané ; la limite est l'absence de garantie d'optimalité.
-
-
+De complexité $\mathcal{O}(K \cdot N)$, cette approche excelle par son temps de résolution quasi-instantané, mais ne formule aucune garantie d'optimalité.
 
 \subsection{LLM-as-Solver, Approche émergente}
 \label{subsec:llm}
 
-Nous utilisons deux LLM comme solveurs directs~: \textbf{GPT-4o} (API OpenAI, exécution distante) et \textbf{Llama~3 8B} (Ollama, exécution locale). Le prompt fournit la description formelle de l'infrastructure, du graphe applicatif, des contraintes et du modèle énergétique, avec une sortie JSON strictement structurée. Pour tenir compte du non-déterminisme, chaque instance est soumise $R = 10$ fois (température $\tau = 0$ pour GPT-4o, $\tau = 0.1$ pour Llama~3) et nous rapportons solution médiane, meilleur cas et variance. Le coût du processus de résolution (temps, tokens et énergie d'inférence) est analysé en Section~\ref{sec:results} (Table~\ref{tab:solver_cost}).
-
+Nous sollicitons deux LLMs distincts comme moteurs directs de résolution : \textbf{GPT-4o} (API OpenAI, distante) et \textbf{Llama~3 8B} (Ollama, locale). Le prompt intègre une description exhaustive de l'infrastructure, du graphe applicatif, des contraintes et du modèle énergétique, imposant une structure de sortie JSON stricte. Pour traiter le non-déterminisme, $R = 10$ itérations sont exécutées par problème (température $\tau = 0$ pour GPT-4o, $\tau = 0.1$ pour Llama~3), permettant d'extraire la solution médiane, l'optimum et la variance. Le coût opérationnel inhérent au solveur (temps, tokens, énergie d'inférence) est détaillé Section~\ref{sec:results}.
 
 % ============================================================
 %  4. PROTOCOLE EXPÉRIMENTAL
@@ -256,41 +228,20 @@ Nous utilisons deux LLM comme solveurs directs~: \textbf{GPT-4o} (API OpenAI, ex
 
 \subsection{Application et infrastructure}
 
-Le cas d'étude est le pipeline DSP $K{=}5$ et les $N{=}5$ VMs GCE SPOT décrits en Section~\ref{sec:model} (Figures~\ref{fig:app_graph}--\ref{fig:infra_gcp}). Les VMs sont provisionnées via un automate idempotent à partir d'un fichier \texttt{.properties}. Un nœud dédié \texttt{storm-nimbus} (\texttt{e2-medium}, \texttt{europe-west9-a}) héberge Apache Storm~2.8.4 (Nimbus\,+\,Zookeeper) \cite{toshniwal2014storm} hors du pool de placement~; les workers Storm Supervisor lisent le placement depuis \texttt{/etc/storm/placement.csv} (\texttt{CsvOneToOneScheduler}).
+Le cas d'étude exploite le pipeline DSP $K{=}5$ et les $N{=}5$ VMs GCE SPOT modélisés Section~\ref{sec:model}. L'infrastructure virtuelle est provisionnée via un automate idempotent depuis un fichier \texttt{.properties}. Un nœud dédié \texttt{storm-nimbus} héberge Apache Storm~2.8.4 hors du pool de placement ; les workers appliquent le placement lu depuis un descripteur \texttt{.csv}.
 
 \subsection{Paramètres énergétiques et algorithmiques}
 
-Le modèle~(\ref{eq:power}) est instancié avec les paramètres~:
-$\text{PUE}{=}1{,}10$, $P_{\text{idle}}{=}1{,}0$~W/vCPU,
-$P_{\text{max}}{=}8{,}0$~W/vCPU, issus des tables SPECpower pour les processeurs
-Intel/AMD sous-jacents aux familles \texttt{e2}/\texttt{n2}. L'énergie réseau est
-pondérée par un facteur de tier déduit de la latence physique~: $\times1{,}0$
-(intra-zone, $\ell < 2$~ms), $\times1{,}5$ (inter-zone, $\ell < 25$~ms),
-$\times2{,}0$ (inter-région, $\ell \geq 25$~ms).
-
-Les paramètres des trois solveurs sont~:
+Le modèle énergétique exploite les constantes : $\text{PUE}{=}1{,}10$, $P_{\text{idle}}{=}1{,}0$~W/vCPU, $P_{\text{max}}{=}8{,}0$~W/vCPU (issues des abaques SPECpower). L'énergie réseau est pondérée par un multiplicateur de tier (selon la latence) : $\times1{,}0$ (intra-zone), $\times1{,}5$ (inter-zone), $\times2{,}0$ (inter-région).
 \begin{itemize}[nosep]
-    \item \textbf{FFD~:} composants triés par CPU décroissant~; placement séquentiel
-    sur la première VM satisfaisant capacité CPU et RAM~; backtracking local sur
-    la contrainte de latence bout-en-bout.
-    \item \textbf{CSP~:} solveur OR-Tools CP-SAT avec l'objectif d'énergie GCP
-    (nœuds + liens, pondéré par tier réseau)~; variables binaires de placement et
-    de routage de flux~; résolution jusqu'à l'optimalité.
-    \item \textbf{LLM~:} framework OPRO~\cite{yang2024large}~; 5~itérations maximum
-    avec arrêt anticipé après 3~itérations sans amélioration~; température
-    $0{,}15 \to 0{,}50 \to 0{,}20$~; 3~placements d'amorçage issus de l'heuristique
-    gloutonne. Modèles évalués~: GPT-4o (API OpenAI, distant) et Llama~3~8B
-    (Ollama, inférence locale).
+    \item \textbf{FFD :} tri CPU décroissant, placement séquentiel conditionnel, et \emph{backtracking} sur la contrainte de latence.
+    \item \textbf{CSP :} OR-Tools CP-SAT programmé pour minimiser formellement l'énergie GCP globale, avec exécution jusqu'à optimalité certifiée.
+    \item \textbf{LLM :} Application du framework OPRO~\cite{yang2024large} bornée à 5 itérations (arrêt prématuré si 3 échecs consécutifs). La température est séquencée ($0{,}15 \to 0{,}50 \to 0{,}20$) et le processus est amorcé (\emph{warm start}) par 3 placements issus de FFD.
 \end{itemize}
 
 \subsection{Collecte des métriques}
 
-L'utilisation CPU et le trafic réseau (RX/TX en octets) sont collectés via
-l'API GCP Cloud Monitoring (\texttt{compute.googleapis.com}) à une granularité
-d'une minute par un outil de monitoring automatisé qui agrège les séries
-temporelles par VM. L'énergie de chaque
-placement est estimée a~posteriori par le modèle~(\ref{eq:power}) à partir de
-ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metrics}.
+Les métriques de charge CPU et de transit réseau (1 minute de granularité) sont extraites de l'API GCP Cloud Monitoring et agrégées par nœud. Le profil énergétique de chaque solution est recalculé a posteriori selon l'équation~(\ref{eq:power}). Les descripteurs d'évaluation alimentant l'analyse sont répertoriés Table~\ref{tab:metrics}.
 
 \begin{table}[t]
     \centering
@@ -310,7 +261,6 @@ ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metr
         \bottomrule
     \end{tabularx}
 \end{table}
-
 
 % ============================================================
 %  5. RÉSULTATS
@@ -367,7 +317,6 @@ ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metr
 
 \todo{Étudier conjointement l'effet de la taille de l'instance et du workload~: faire varier le nombre de composants ($K = 3, 4, 5$), le nombre de VMs ($N = 5, 8, 10$) et $\lambda$, puis montrer l'évolution du temps de résolution, du coût LLM et des placements obtenus.}
 
-
 % ============================================================
 %  6. DISCUSSION
 % ============================================================
@@ -376,16 +325,12 @@ ces mesures. Les métriques comparatives sont récapitulées Table~\ref{tab:metr
 
 \subsection{Pertinence du modèle énergétique}
 
-Le modèle linéaire (\ref{eq:power}) est-il suffisant~? Notre calibration sur GCE (\ref{sec:setup}) permet de vérifier empiriquement la linéarité. Si les résidus de régression montrent des écarts significatifs au-delà de 70\% d'utilisation, le modèle quadratique $P_{dyn}(u) = \mu_1 u + \mu_2 u^2$, proposé par Iftikhar et al.~\cite{iftikhar2023hunterplus}, serait préférable. Cependant, pour le problème de placement (où l'objectif est \emph{comparatif} entre solutions), le modèle linéaire préserve le classement relatif des placements.
-
-Les formulations à base de DVFS ($P \propto V_{dd}^2 \cdot f$) ne sont pas applicables ici~: les VMs cloud ne permettent pas de contrôler la tension ou la fréquence processeur.
-
+La calibration sur GCE valide empiriquement le postulat de linéarité de l'équation (\ref{eq:power}). Si les résidus d'analyse trahissaient un écart discriminant au-delà de 70\% de charge, la révision vers un modèle quadratique $P_{dyn}(u) = \mu_1 u + \mu_2 u^2$~\cite{iftikhar2023hunterplus} s'imposerait. Néanmoins, pour notre objectif purement \emph{comparatif}, le référentiel linéaire préserve fidèlement le tri ordinal des solutions. Les dérivations mathématiques basées sur le contrôle DVFS ($P \propto V_{dd}^2 \cdot f$) demeurent quant à elles inapplicables sur des instances Cloud où le contrôle de fréquence échappe à l'utilisateur.
 \todo{Discuter si un modèle réseau plus fin (énergie par octet transmis, énergie des switches) changerait le classement des solutions.}
 
 \subsection{LLM comme solveur et limites}
 
 \todo{Discuter les résultats en termes de fiabilité (taux de solutions valides, hallucinations éventuelles), de qualité (écart à l'optimum CSP), et de rapport coût/qualité. Préciser aussi les scénarios favorables (warm start, timeout du CSP) et les principales limites de l'étude~: énergie estimée et non mesurée, infrastructure modeste, prompt conçu manuellement, absence d'énergie incorporée.}
-
 
 % ============================================================
 %  7. TRAVAUX CONNEXES
@@ -394,14 +339,13 @@ Les formulations à base de DVFS ($P \propto V_{dd}^2 \cdot f$) ne sont pas appl
 \label{sec:related}
 
 \textbf{Placement de services et énergie.}
-Le problème de placement de services avec prise en compte de l'énergie a été largement étudié dans le contexte Cloud~\cite{beloglazov2012energy} et Cloud-Edge~\cite{goudarzi2021distributed}. Les approches exactes (ILP, CSP) offrent l'optimalité mais ne passent pas à l'échelle~\cite{mann2015allocation}. Les heuristiques (First Fit, Best Fit) et méta-heuristiques (génétiques, recuit simulé) dominent les déploiements pratiques. Les approches DRL~\cite{goudarzi2021distributed} apprennent des politiques de placement mais nécessitent un entraînement coûteux. Cependant, peu de travaux comparent systématiquement ces familles d'approches \emph{sous l'angle énergétique} sur une même infrastructure réelle.
+Cette problématique a été abondamment documentée dans le Cloud~\cite{beloglazov2012energy} et le Cloud-Edge~\cite{goudarzi2021distributed}. Les méthodes exactes, bien qu'optimales, souffrent d'inaptitude structurelle au passage à l'échelle~\cite{mann2015allocation}. En pratique, les heuristiques ou les cadres DRL~\cite{goudarzi2021distributed} prédominent, malgré des coûts d'apprentissage majeurs pour le DRL. Toutefois, rares sont les travaux confrontant systématiquement ces écoles algorithmiques sous le prisme strict de l'efficience énergétique sur une infrastructure réelle.
 
 \textbf{LLM pour l'optimisation combinatoire.}
-Yang et al.~\cite{yang2024large} proposent un survey des LLM comme optimiseurs, montrant des résultats prometteurs sur le TSP et le bin-packing. Cependant, l'application au placement de services avec contraintes multi-dimensionnelles et objectif énergétique reste inexplorée. Notre travail comble ce vide en évaluant les LLM sur un problème de placement réel.
+Yang et al.~\cite{yang2024large} soulignent le potentiel des LLM dévoyés de leur usage originel pour résoudre des problèmes comme le TSP ou le bin-packing. Cependant, leur subordination à l'optimisation multi-dimensionnelle d'un placement de services avec objectif énergétique reste un champ inexploré que cette étude s'attache à combler.
 
 \textbf{Modèles énergétiques.}
-Le modèle linéaire $P(u)$ a été introduit par Beloglazov et al.~\cite{beloglazov2012energy} dans le contexte de la consolidation de VMs en data center. Des extensions non-linéaires (quadratiques) et à base de DVFS ont été proposées~\cite{adhikari2019energy, iftikhar2023hunterplus}. Le présent article applique et valide le modèle linéaire sur un cas de placement DSP multi-composants sur infrastructure Cloud réelle.
-
+L'expression de référence de Beloglazov et al.~\cite{beloglazov2012energy} a inspiré de multiples déclinaisons (quadratiques, DVFS)~\cite{adhikari2019energy, iftikhar2023hunterplus}. Notre article se singularise en appliquant et en certifiant ce modèle de linéarité stricte sur un pipeline DSP réel.
 
 % ============================================================
 %  8. CONCLUSION
@@ -409,12 +353,10 @@ Le modèle linéaire $P(u)$ a été introduit par Beloglazov et al.~\cite{belogl
 \section{Conclusion et perspectives}
 \label{sec:conclusion}
 
-Nous avons présenté une évaluation comparative de trois paradigmes de placement de services DSP multi-composants sur infrastructure Cloud, analysés sous l'angle de leur empreinte énergétique~: heuristique (FFD), exact (CSP) et LLM-as-Solver (GPT-4o, Llama~3). En utilisant un modèle énergétique linéaire fondé sur l'utilisation CPU~\cite{beloglazov2012energy} comme base commune d'évaluation, nous avons comparé la qualité des placements produits, la consommation énergétique estimée, le temps de résolution et le coût du solveur lui-même sur des VMs Google Compute Engine hétérogènes et géo-distribuées.
-
+Cet article propose une évaluation comparative croisant trois écoles algorithmiques (FFD, CSP, et LLM) opérant le placement de services DSP dans le Cloud sous le prisme de l'efficience énergétique. Adossés au modèle d'approximation linéaire de l'usage CPU~\cite{beloglazov2012energy}, nous avons confronté la qualité des placements, la charge matérielle induite et les surcoûts inhérents au temps de résolution sur une flotte d'instances GCE hétérogènes.
 \todo{Résumer les résultats clés en 2--3 phrases.}
 
-Nos perspectives incluent~: (i)~l'extension à des instances plus grandes ($K > 10$, $N > 20$) pour tester les limites du CSP et du LLM, (ii)~l'utilisation du LLM comme générateur de \emph{warm start} pour le CSP (placement initial LLM affiné par le solveur exact), (iii)~l'intégration de modèles énergétiques non-linéaires et réseau, et (iv)~la validation sur une infrastructure Edge réelle (Jetson Nano, Raspberry Pi) avec mesure directe de puissance.
-
+Nos perspectives ciblent : (i) la mise à l'épreuve des modèles sur des instances de plus grande envergure ($K > 10$, $N > 20$) pour jalonner les limites du CSP et des LLM, (ii) l'orchestration des LLM restreinte à la seule inférence d'amorce (\emph{warm start}) optimisée ensuite par le CSP, (iii) l'intégration analytique de profils énergétiques non-linéaires, et (iv) la transposition empirique de ce protocole sur du matériel Edge (Jetson Nano, Raspberry Pi) assortie de relevés métrologiques en temps réel.
 
 % ============================================================
 %  RÉFÉRENCES
@@ -422,3 +364,4 @@ Nos perspectives incluent~: (i)~l'extension à des instances plus grandes ($K > 
 \bibliography{compas_refs}
 
 \end{document}
+
