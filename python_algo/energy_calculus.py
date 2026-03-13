@@ -125,14 +125,31 @@ def _load_infra5_metadata():
 
 # ── Energy calculation ─────────────────────────────────────────────────────────
 
-def _clean_metrics(df):
-    """Drop rows that are clearly GCP Monitoring API failures (all-zero readings)."""
+def _aggregate_metrics(df):
+    """
+    Drop API failure rows, then collapse each VM to a single representative
+    row using the median CPU, RX, and TX across all valid samples.
+
+    Energy consumption and data transfer are expected to be constant for a
+    given placement, so the median is the right estimator — it is also
+    robust to the rare background-transfer bursts seen in raw GCP data.
+
+    Returns a DataFrame with one row per VM and an extra Sample_Count column
+    that records how many valid samples were collected for that VM.
+    """
     bad = (
         (df["CPU_Usage_Percent"] == 0.0) &
         (df["Network_TX_Bytes"]  == 0.0) &
         (df["Network_RX_Bytes"]  == 0.0)
     )
-    return df[~bad].copy()
+    df = df[~bad]
+
+    counts  = df.groupby("VM_Name").size().rename("Sample_Count")
+    medians = df.groupby("VM_Name")[
+        ["CPU_Usage_Percent", "Network_RX_Bytes", "Network_TX_Bytes"]
+    ].median()
+
+    return medians.join(counts).reset_index()
 
 
 def _row_energy(row, cfg, vm_latency_map):
@@ -171,17 +188,25 @@ def _add_carbon_columns(df, vm_zone_map):
 
 def calculate_energy(data_source):
     """
-    Load a metrics CSV, compute per-sample IT energy and carbon emissions,
-    and return an enriched DataFrame.
+    Load a metrics CSV, compute total IT energy and carbon emissions per VM,
+    and return an enriched DataFrame (one row per VM).
+
+    Energy per interval is derived from the median CPU/RX/TX across all valid
+    samples, then scaled by the actual sample count to obtain totals.
     """
     df  = pd.read_csv(data_source)
     cfg = _load_energy_settings()
     vm_zone_map, vm_latency_map = _load_infra5_metadata()
 
-    df = _clean_metrics(df)
+    df = _aggregate_metrics(df)
 
+    # Energy per single interval (Joules) at the median operating point
     energy_rows = [_row_energy(row, cfg, vm_latency_map) for _, row in df.iterrows()]
     df["Energy_CPU_Joules"], df["Energy_Net_Joules"] = zip(*energy_rows)
+
+    # Scale by sample count → total energy over the full experiment
+    df["Energy_CPU_Joules"] *= df["Sample_Count"]
+    df["Energy_Net_Joules"] *= df["Sample_Count"]
 
     df["Energy_IT_Total_Joules"]   = df["Energy_CPU_Joules"] + df["Energy_Net_Joules"]
     df["Energy_Grid_Total_Joules"] = df["Energy_IT_Total_Joules"] * GCP_PUE
@@ -204,16 +229,17 @@ def strategy_name_from_path(file_path):
 def summarize_strategy(file_path):
     df = calculate_energy(file_path)
 
-    vm_summary = df.groupby("VM_Name")[
+    # df already has one row per VM after aggregation
+    vm_summary = df.set_index("VM_Name")[
         ["Energy_CPU_Joules", "Energy_Net_Joules", "Energy_Grid_Total_Joules",
          "Energy_Grid_Total_Wh", "Carbon_Emissions_g"]
-    ].sum()
+    ].sort_values("Energy_Grid_Total_Wh", ascending=False)
 
-    totals      = vm_summary.sum()
-    sample_count = len(df)
-    vm_count     = df["VM_Name"].nunique()
-    # Effective duration: (valid samples per VM) × interval
-    duration_min = (sample_count / vm_count) * (TIME_INTERVAL_SEC / 60.0)
+    totals       = vm_summary.sum()
+    vm_count     = len(df)
+    sample_count = int(df["Sample_Count"].sum())
+    # Average samples per VM × interval gives the effective experiment duration
+    duration_min = df["Sample_Count"].mean() * (TIME_INTERVAL_SEC / 60.0)
 
     return {
         "strategy":              strategy_name_from_path(file_path),
