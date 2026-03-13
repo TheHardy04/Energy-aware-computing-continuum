@@ -31,7 +31,7 @@ python main.py
   - `LLM`
   - `GreedyFirstFit`
   - `GreedyFirstIterate`
-- `--to-csv <path>`: export placement CSV.
+- `--placement-csv <path>`: export placement CSV.
   - default: `results/placement.csv`
 
 ## Examples

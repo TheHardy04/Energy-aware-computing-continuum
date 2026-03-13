@@ -48,7 +48,7 @@ else
     echo "⚠️  Warning : Python virtual environment not found at $HOME/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
 # run the placement algorithm
-python "$PROJECT_ROOT/python_algo/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --to-csv "$PROJECT_ROOT/result/placement.csv"
+python "$PROJECT_ROOT/python_algo/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PROJECT_ROOT/result/placement.csv" --metrics-csv "$PROJECT_ROOT/result/metrics_${STRATEGY}.csv"
 if [ $? -ne 0 ]; then
     echo "❌ Python placement algorithm failed. Please check the errors above."
     exit 1

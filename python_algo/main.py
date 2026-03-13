@@ -107,7 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
     ' (default: properties/Appli_8comps_smartbuilding.properties)')
     parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'LLM', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
-    parser.add_argument('--to-csv', type=str, default='results/placement.csv', help='Optional path to export results as CSV')
+    parser.add_argument('--placement-csv', type=str, default='results/placement.csv', help='Optional path to export placement results as CSV')
+    parser.add_argument('--metrics-csv', type=str, default='results/metrics.csv', help='Optional path to export evaluation metrics as CSV (rows are appended, useful for benchmarks)')
     args = parser.parse_args()
 
 
@@ -235,13 +236,31 @@ if __name__ == '__main__':
     metrics = Evaluator.evaluate(net, svc, result, verbose=args.verbose)  
 
     # Export results to CSV if requested
-    if args.to_csv:
+    if args.placement_csv:
         logger.info("Exporting placement results to CSV...")
-        filename = args.to_csv
-        # check if directory exists, if not create it
+        filename = args.placement_csv
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         ResultExporter.export_placement_to_csv(result, filename=filename)
         logger.info(f"Placement exported to {filename}")
+
+    # Export evaluation metrics to CSV if requested
+    if args.metrics_csv:
+        logger.info("Exporting evaluation metrics to CSV...")
+        metrics_filename = args.metrics_csv
+        os.makedirs(os.path.dirname(metrics_filename), exist_ok=True)
+        ResultExporter.export_metrics_to_csv(
+            metrics,
+            filename=metrics_filename,
+            extra_fields={
+                'strategy': args.strategy,
+                'infra': os.path.basename(args.infra),
+                'app': os.path.basename(args.app),
+                'status': result.meta.get('status', ''),
+                'resolution_time_s': resolution_time_s,
+            },
+            append=True,
+        )
+        logger.info(f"Evaluation metrics exported to {metrics_filename}")
 
     
     # If graphs were plotted, inform the user to close them to exit
