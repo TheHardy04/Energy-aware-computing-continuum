@@ -1,5 +1,7 @@
 #!/bin/bash
-# Script to launch the placement and topology in the cluster after the VMs are setup and storm is running
+# Script to run placement, copy scheduler CSV inputs, and submit a Storm topology.
+
+set -euo pipefail
 
 
 # Get the directory where this script is located
@@ -11,6 +13,17 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Variables
+RESULTS_DIR="$PROJECT_ROOT/results"
+PLACEMENT_FILE="$RESULTS_DIR/placement.csv"
+
+resolve_path() {
+    local input_path="$1"
+    if [[ "$input_path" = /* ]]; then
+        printf '%s\n' "$input_path"
+    else
+        printf '%s\n' "$PROJECT_ROOT/$input_path"
+    fi
+}
 
 # Check for arguments INFRA, APP, MAPPING, optional STRATEGY
 if [ $# -lt 3 ]; then
@@ -24,9 +37,9 @@ if [ $# -lt 3 ]; then
     exit 1
 fi
 
-INFRA_FILE="$1"
-APP_FILE="$2"
-MAPPING_FILE="$3"
+INFRA_FILE="$(resolve_path "$1")"
+APP_FILE="$(resolve_path "$2")"
+MAPPING_FILE="$(resolve_path "$3")"
 STRATEGY="${4:-CSP}"
 
 case "$STRATEGY" in
@@ -39,6 +52,25 @@ case "$STRATEGY" in
         ;;
 esac
 
+if [ ! -f "$INFRA_FILE" ]; then
+    echo "❌ Infrastructure properties file not found: $INFRA_FILE"
+    exit 1
+fi
+
+if [ ! -f "$APP_FILE" ]; then
+    echo "❌ Application properties file not found: $APP_FILE"
+    exit 1
+fi
+
+if [ ! -f "$MAPPING_FILE" ]; then
+    echo "❌ Mapping CSV file not found: $MAPPING_FILE"
+    exit 1
+fi
+
+mkdir -p "$RESULTS_DIR"
+
+METRICS_FILE="$RESULTS_DIR/metrics_${STRATEGY}.csv"
+
 # launch python algo placement
 echo "===================== Running python placement algorithm (strategy: $STRATEGY) ... ===================="
 # venv activation
@@ -48,33 +80,17 @@ else
     echo "⚠️  Warning : Python virtual environment not found at $HOME/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
 # run the placement algorithm
-python "$PROJECT_ROOT/python_algo/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PROJECT_ROOT/result/placement.csv" --metrics-csv "$PROJECT_ROOT/result/metrics_${STRATEGY}.csv"
-if [ $? -ne 0 ]; then
-    echo "❌ Python placement algorithm failed. Please check the errors above."
-    exit 1
-fi
+python "$PROJECT_ROOT/python_algo/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PLACEMENT_FILE" --metrics-csv "$METRICS_FILE"
 echo "✅ Python placement algorithm completed successfully!"
 echo "===================== Copying placement results to /etc/storm/placement.csv ... ===================="
-sudo cp "$PROJECT_ROOT/result/placement.csv" /etc/storm/placement.csv
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to copy placement results to /etc/storm/placement.csv. Please check permissions and ensure the path is correct."
-    exit 1
-fi
+sudo cp "$PLACEMENT_FILE" /etc/storm/placement.csv
 echo "✅ Placement results copied successfully!"
 echo "===================== Copying mapping file to /etc/storm/mapping.csv ... ===================="
 sudo cp "$MAPPING_FILE" /etc/storm/mapping.csv
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to copy mapping file to /etc/storm/mapping.csv. Please check permissions and ensure the path is correct."
-    exit 1
-fi
 echo "✅ Mapping file copied successfully!"
 
 ## Launch the topology using the properties file
 echo "===================== Launching topology from properties file ... ===================="
 "$SCRIPT_DIR/launch_topology_from_properties.sh" "$APP_FILE" "DeployedTopology"
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to launch topology from properties file. Please check the errors above."
-    exit 1
-fi
 
 echo "Done" 
