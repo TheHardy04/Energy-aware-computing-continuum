@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import re
 import networkx as nx
+from functools import lru_cache
 
 from src.gcpEnergyModel import _load_energy_settings, link_factor
 from src.infraProperties import InfraProperties
@@ -38,7 +39,7 @@ EXPERIMENT_REGION = "europe-west9"
 PROJECT_ROOT          = Path(__file__).resolve().parents[1]
 INFRA_PROPERTIES_PATH = Path(__file__).resolve().parent / "properties" / "Infra_5nodes_GCP.properties"
 INFRA_MAPPING_PATH    = Path(__file__).resolve().parent / "properties" / "Infra_5nodes_GCP_mapping.csv"
-METRICS_RESULTS_DIR   = PROJECT_ROOT / "results"
+METRICS_RESULTS_DIR   = PROJECT_ROOT / "results_infra10"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -254,8 +255,84 @@ def strategy_name_from_path(file_path):
     return file_path.name.replace("_gcp_experiment_metrics.csv", "").upper()
 
 
+def _normalize_strategy_name(name):
+    """Normalize strategy names for robust cross-file matching."""
+    if not isinstance(name, str):
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", name.upper())
+
+
+@lru_cache(maxsize=1)
+def _load_algorithm_energy_index():
+    """
+    Load solver/algorithm energy metrics from results/metrics_*.csv.
+
+    Returns
+    -------
+    dict[strategy_key -> dict]
+    """
+    index = {}
+    files = sorted(METRICS_RESULTS_DIR.glob("metrics_*.csv"))
+    metric_cols = [
+        "solver_energy_wh",
+        "solver_energy_min_wh",
+        "solver_energy_max_wh",
+        "solver_energy_j",
+        "solver_energy_min_j",
+        "solver_energy_max_j",
+        "solver_energy_model",
+    ]
+
+    for file_path in files:
+        try:
+            df = pd.read_csv(file_path)
+        except Exception:
+            continue
+
+        if "strategy" not in df.columns:
+            continue
+
+        for strategy_name, group in df.groupby("strategy", dropna=True):
+            key = _normalize_strategy_name(str(strategy_name))
+            if not key:
+                continue
+
+            entry = {}
+            for col in metric_cols:
+                if col not in group.columns:
+                    continue
+                if col == "solver_energy_model":
+                    non_null = group[col].dropna()
+                    if not non_null.empty:
+                        entry[col] = str(non_null.iloc[0])
+                else:
+                    vals = pd.to_numeric(group[col], errors="coerce").dropna()
+                    if not vals.empty:
+                        entry[col] = float(vals.mean())
+
+            if entry:
+                index[key] = entry
+
+    return index
+
+
+def _algorithm_metrics_for_strategy(strategy_name):
+    """Fetch algorithm-energy metrics for a strategy name with fuzzy matching."""
+    index = _load_algorithm_energy_index()
+    key = _normalize_strategy_name(strategy_name)
+    if key in index:
+        return index[key]
+
+    # Fallback for names like GREEDY vs GreedyFirstFit.
+    for k, v in index.items():
+        if key and (key in k or k in key):
+            return v
+    return {}
+
+
 def summarize_strategy(file_path):
     df = calculate_energy(file_path)
+    algo = _algorithm_metrics_for_strategy(strategy_name_from_path(file_path))
 
     # df already has one row per VM after aggregation
     vm_summary = df.set_index("VM_Name")[
@@ -281,6 +358,13 @@ def summarize_strategy(file_path):
         "total_carbon_g":        totals["Carbon_Emissions_g"],
         "total_graph_latency_ms": float(df["VM_Total_Path_Latency_ms"].sum(skipna=True)),
         "avg_vm_path_latency_ms": float(df["VM_Avg_Path_Latency_ms"].mean(skipna=True)),
+        "solver_energy_wh": float(algo.get("solver_energy_wh", 0.0)),
+        "solver_energy_min_wh": float(algo.get("solver_energy_min_wh", 0.0)),
+        "solver_energy_max_wh": float(algo.get("solver_energy_max_wh", 0.0)),
+        "solver_energy_j": float(algo.get("solver_energy_j", 0.0)),
+        "solver_energy_min_j": float(algo.get("solver_energy_min_j", 0.0)),
+        "solver_energy_max_j": float(algo.get("solver_energy_max_j", 0.0)),
+        "solver_energy_model": str(algo.get("solver_energy_model", "unknown")),
         "normalized_wh_per_min":     totals["Energy_Grid_Total_Wh"] / duration_min,
         "normalized_carbon_per_min": totals["Carbon_Emissions_g"]   / duration_min,
         "vm_summary": vm_summary.sort_values("Energy_Grid_Total_Wh", ascending=False),
@@ -295,6 +379,9 @@ def print_strategy_summary(summary):
         f"VMs: {summary['vm_count']}\n"
         f"Graph Latency  → Total: {summary['total_graph_latency_ms']:.2f} ms | "
         f"Avg VM Path: {summary['avg_vm_path_latency_ms']:.2f} ms\n"
+        f"Algorithm     → Solver: {summary['solver_energy_wh']:.6f} Wh "
+        f"[{summary['solver_energy_min_wh']:.6f}, {summary['solver_energy_max_wh']:.6f}] "
+        f"({summary['solver_energy_model']})\n"
         f"Raw Totals     → Grid: {summary['total_energy_grid_wh']:.4f} Wh | "
         f"Carbon: {summary['total_carbon_g']:.4f} g CO₂eq\n"
         f"Normalized     → {summary['normalized_wh_per_min']:.4f} Wh/min | "
@@ -324,6 +411,7 @@ def main():
             "Duration(m)": round(s["duration_mins"], 1),
             "Total_Wh":    s["total_energy_grid_wh"],
             "Total_CO2_g": s["total_carbon_g"],
+            "Solver_Wh":   s["solver_energy_wh"],
             "Norm_Wh/min": s["normalized_wh_per_min"],
             "Norm_CO2/min": s["normalized_carbon_per_min"],
         }
