@@ -1,8 +1,11 @@
 from pathlib import Path
 import pandas as pd
 import re
+import networkx as nx
 
 from src.gcpEnergyModel import _load_energy_settings, link_factor
+from src.infraProperties import InfraProperties
+from src.networkGraph import NetworkGraph
 
 # Power profiles by VM type (Watts). Based on GCP hardware + SPECpower data.
 POWER_PROFILES = {
@@ -80,10 +83,11 @@ def _load_infra5_metadata():
     Returns
     -------
     vm_zone_map    : dict[vm_name -> zone_string]
-    vm_latency_map : dict[vm_name -> average_outgoing_latency_ms]
+    vm_latency_map : dict[vm_name -> avg_shortest_path_latency_ms_to_other_vms]
+    vm_total_latency_map : dict[vm_name -> sum_shortest_path_latency_ms_to_other_vms]
     """
     if not INFRA_PROPERTIES_PATH.exists() or not INFRA_MAPPING_PATH.exists():
-        return {}, {}
+        return {}, {}, {}
 
     with open(INFRA_PROPERTIES_PATH, "r", encoding="utf-8") as f:
         lines = _join_continuation_lines(f.read())
@@ -96,31 +100,49 @@ def _load_infra5_metadata():
         elif line.startswith("network.topology"):
             _, topology_line = line.split("=", 1)
 
-    # Average outgoing latency per host index
-    host_latency: dict[int, list[float]] = {}
-    for src, dst, _bw, lat in re.findall(
-        r"\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*(\d+)\s*\}", topology_line
-    ):
-        if src != dst:
-            host_latency.setdefault(int(src), []).append(float(lat))
-
-    host_latency_fallback = {
-        h: sum(lats) / len(lats) for h, lats in host_latency.items() if lats
-    }
-
     mapping_df = pd.read_csv(INFRA_MAPPING_PATH)
     mapping_df.columns = [str(c).strip().lower() for c in mapping_df.columns]
     if "host" not in mapping_df.columns or "vm" not in mapping_df.columns:
-        return {}, {}
+        return {}, {}, {}
 
-    vm_zone_map, vm_latency_map = {}, {}
+    # Build infra graph from properties to compute shortest-path latencies.
+    # This captures end-to-end path latency rather than only direct outgoing links.
+    infra = InfraProperties.from_file(str(INFRA_PROPERTIES_PATH))
+    infra_graph = NetworkGraph.from_infra_dict(infra.to_dict()).G
+
+    vm_host_map = {
+        str(row["vm"]).strip(): int(row["host"])
+        for _, row in mapping_df.iterrows()
+    }
+
+    host_pair_latency: dict[tuple[int, int], float] = {}
+    unique_hosts = sorted(set(vm_host_map.values()))
+    for src_host in unique_hosts:
+        for dst_host in unique_hosts:
+            if src_host == dst_host:
+                continue
+            try:
+                lat = nx.shortest_path_length(infra_graph, src_host, dst_host, weight="latency")
+                host_pair_latency[(src_host, dst_host)] = float(lat)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                # Keep missing pair absent and use the model default downstream.
+                continue
+
+    vm_zone_map, vm_latency_map, vm_total_latency_map = {}, {}, {}
     for _, row in mapping_df.iterrows():
         host_i  = int(row["host"])
         vm_name = str(row["vm"]).strip()
         vm_zone_map[vm_name]    = zones[host_i] if host_i < len(zones) else ""
-        vm_latency_map[vm_name] = host_latency_fallback.get(host_i)
+        path_lats = [
+            lat
+            for (src, _dst), lat in host_pair_latency.items()
+            if src == host_i
+        ]
+        if path_lats:
+            vm_total_latency_map[vm_name] = sum(path_lats)
+            vm_latency_map[vm_name] = vm_total_latency_map[vm_name] / len(path_lats)
 
-    return vm_zone_map, vm_latency_map
+    return vm_zone_map, vm_latency_map, vm_total_latency_map
 
 
 # ── Energy calculation ─────────────────────────────────────────────────────────
@@ -166,6 +188,8 @@ def _row_energy(row, cfg, vm_latency_map):
 
     if "Path_Latency_ms" in row.index and pd.notna(row["Path_Latency_ms"]):
         latency_ms = float(row["Path_Latency_ms"])
+    elif "VM_Avg_Path_Latency_ms" in row.index and pd.notna(row["VM_Avg_Path_Latency_ms"]):
+        latency_ms = float(row["VM_Avg_Path_Latency_ms"])
     else:
         latency_ms = float(vm_latency_map.get(row["VM_Name"], cfg["gcp.lat.interzone_ms"]))
 
@@ -196,9 +220,13 @@ def calculate_energy(data_source):
     """
     df  = pd.read_csv(data_source)
     cfg = _load_energy_settings()
-    vm_zone_map, vm_latency_map = _load_infra5_metadata()
+    vm_zone_map, vm_latency_map, vm_total_latency_map = _load_infra5_metadata()
 
     df = _aggregate_metrics(df)
+
+    # Graph-derived latencies for reporting and fallback energy modeling.
+    df["VM_Avg_Path_Latency_ms"] = df["VM_Name"].map(vm_latency_map)
+    df["VM_Total_Path_Latency_ms"] = df["VM_Name"].map(vm_total_latency_map)
 
     # Energy per single interval (Joules) at the median operating point
     energy_rows = [_row_energy(row, cfg, vm_latency_map) for _, row in df.iterrows()]
@@ -231,7 +259,8 @@ def summarize_strategy(file_path):
 
     # df already has one row per VM after aggregation
     vm_summary = df.set_index("VM_Name")[
-        ["Energy_CPU_Joules", "Energy_Net_Joules", "Energy_Grid_Total_Joules",
+        ["VM_Avg_Path_Latency_ms", "VM_Total_Path_Latency_ms",
+         "Energy_CPU_Joules", "Energy_Net_Joules", "Energy_Grid_Total_Joules",
          "Energy_Grid_Total_Wh", "Carbon_Emissions_g"]
     ].sort_values("Energy_Grid_Total_Wh", ascending=False)
 
@@ -250,6 +279,8 @@ def summarize_strategy(file_path):
         "total_net_joules":      totals["Energy_Net_Joules"],
         "total_energy_grid_wh":  totals["Energy_Grid_Total_Wh"],
         "total_carbon_g":        totals["Carbon_Emissions_g"],
+        "total_graph_latency_ms": float(df["VM_Total_Path_Latency_ms"].sum(skipna=True)),
+        "avg_vm_path_latency_ms": float(df["VM_Avg_Path_Latency_ms"].mean(skipna=True)),
         "normalized_wh_per_min":     totals["Energy_Grid_Total_Wh"] / duration_min,
         "normalized_carbon_per_min": totals["Carbon_Emissions_g"]   / duration_min,
         "vm_summary": vm_summary.sort_values("Energy_Grid_Total_Wh", ascending=False),
@@ -262,12 +293,14 @@ def print_strategy_summary(summary):
         f"Valid Duration : {summary['duration_mins']:.1f} min | "
         f"Samples: {summary['sample_count']} | "
         f"VMs: {summary['vm_count']}\n"
+        f"Graph Latency  → Total: {summary['total_graph_latency_ms']:.2f} ms | "
+        f"Avg VM Path: {summary['avg_vm_path_latency_ms']:.2f} ms\n"
         f"Raw Totals     → Grid: {summary['total_energy_grid_wh']:.4f} Wh | "
         f"Carbon: {summary['total_carbon_g']:.4f} g CO₂eq\n"
         f"Normalized     → {summary['normalized_wh_per_min']:.4f} Wh/min | "
         f"{summary['normalized_carbon_per_min']:.4f} g CO₂eq/min"
     )
-    print("\nPer-VM energy totals (raw):")
+    print("\nPer-VM totals (graph latency + raw energy):")
     display = summary["vm_summary"].drop(columns=["Energy_Grid_Total_Joules"])
     print(display.round(4).to_string())
     print("-" * 60 + "\n")
