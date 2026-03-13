@@ -1,0 +1,3 @@
+strategy,infra,app,status,resolution_time_s,total_energy_w,energy_node_w,energy_link_w,avg_latency_ms,worst_latency_ms,total_latency_ms,active_hosts,solver_energy_wh,solver_energy_min_wh,solver_energy_max_wh,solver_energy_j,solver_energy_min_j,solver_energy_max_j,solver_energy_model,host_cpu_usage,host_ram_usage,violations
+CSP,Infra_5nodes_GCP.properties,Appli_5comps_GCP.properties,success,0.013226639999629697,9262.7,62.7,9200.0,4.25,12.0,17.0,4,0.0001653329999953712,0.00013226639999629696,0.00019839959999444544,0.5951987999833364,0.47615903998666903,0.7142385599800036,runtime_power,"{0: 3, 1: 2, 2: 0, 3: 1, 4: 1}","{0: 3000, 1: 2000, 2: 0, 3: 1000, 4: 1000}",
+    
