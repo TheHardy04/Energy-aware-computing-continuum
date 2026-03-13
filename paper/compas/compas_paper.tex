@@ -211,6 +211,8 @@ L'approche \emph{LLM-as-Solver} sollicite GPT-4o (distante) et Llama~3 8B (local
 \subsection{Protocole expérimental}
 Le pipeline DSP $K{=}5$ s'exécute sur $N{=}5$ VMs GCP SPOT gérées par un nœud \texttt{storm-nimbus} isolé. Le modèle énergétique exploite les constantes SPECpower : $\text{PUE}{=}1{,}10$, $P_{\text{idle}}{=}1{,}0$~W/vCPU, $P_{\text{max}}{=}8{,}0$~W/vCPU. Le coût énergétique du LLM ($E_{solver}$) est estimé par le volume de tokens traités selon l'approche de Luccioni et al.~\cite{luccioni2023power}. Le CSP vise l'optimalité certifiée, tandis que le LLM utilise le framework OPRO~\cite{yang2024large} amorcé par des solutions FFD. 
 
+Les métriques sont collectées à chaque intervalle $\Delta t{=}60$~s depuis Google Cloud Monitoring (CPU\%, octets RX/TX par VM). Pour chaque VM, nous retenons la médiane temporelle de CPU, RX et TX (robuste aux pics transitoires), puis calculons l'énergie d'intervalle $E_{CPU}{+}E_{net}$, appliquons le facteur d'infrastructure ($E_{grid}{=}(E_{CPU}{+}E_{net})\times\text{PUE}$), et convertissons en carbone via l'intensité régionale ($CO_2{=}E_{grid}(\text{kWh})\times I_{region}$). Les coefficients PUE et intensités carbone régionales suivent le \emph{Google Environmental Report 2025} ~\cite{google2025environmentalreport}. Cette dépendance à des facteurs environnementaux publiés par l'opérateur lui-même constitue une limite de validité externe : bien que ce rapport soit une source institutionnelle sérieuse, ses agrégations et choix méthodologiques peuvent conduire à une estimation partiellement optimiste de l'impact réel.
+
 \begin{table}[H]
     \centering
     \footnotesize
@@ -220,16 +222,19 @@ Le pipeline DSP $K{=}5$ s'exécute sur $N{=}5$ VMs GCP SPOT gérées par un nœu
         \toprule
         \textbf{Métrique} & \textbf{Description} \\
         \midrule
-        $E_{total}$        & Énergie estimée compute + réseau (Wh) \\
-        $\mathcal{L}_{e2e}$ & Latence bout-en-bout du placement (ms) \\
-        $T_{solve}$        & Temps de résolution du solveur \\
-        $E_{solver}$       & Tokens/énergie du processus LLM \\
+        $E_{grid}$ (Wh)     & Énergie totale au compteur électrique : $(E_{CPU}+E_{net})\times\text{PUE}$ \\
+        $CO_2$ (g)          & Empreinte carbone : $E_{grid}(\text{kWh})\times I_{region}$ \\
+        $\widetilde{E}_{grid}$ (Wh/min) & Énergie normalisée par minute pour comparer des durées d'exécution différentes \\
+        $\widetilde{CO}_2$ (g/min)      & Carbone normalisé par minute \\
+        Durée valide (min)  & Durée effective estimée à partir des échantillons valides : $(\#samples/\#VM)\times\Delta t$ \\
+        $T_{solve}$ (s)     & Temps de résolution du solveur (coût décisionnel) \\
+        $E_{solver}$ (Wh)   & Énergie du processus de résolution (notamment tokens/inférence pour LLM) \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
 \subsection{Analyse des performances}
-L'analyse (Table~\ref{tab:results_main}) démontre que le CSP minimise drastiquement l'énergie et la latence ($E_{total}{=}9262{,}7$, $\mathcal{L}_{e2e}{=}17$~ms). Le LLM produit une alternative valide mais sous-optimale (+17,3\% d'énergie), devançant néanmoins FFD (+60,4\% d'énergie, 25~ms). Dans tous les cas, la composante réseau représente plus de 99\% du coût énergétique total, prouvant que la proximité géographique prévaut sur la consolidation brute des hôtes pour ce profil d'application.
+Les résultats expérimentaux (Table~\ref{tab:results_main}) montrent un écart réduit entre CSP et LLM, et une dégradation nette de l'heuristique GREEDY. En énergie normalisée, le CSP est premier ($\widetilde{E}_{grid}=0{,}5654$~Wh/min), suivi de très près par le LLM ($0{,}5738$~Wh/min, soit +1{,}49\% vs CSP), tandis que GREEDY est significativement moins efficace ($0{,}7532$~Wh/min, soit +33{,}21\% vs CSP). Côté carbone total, le LLM obtient la plus faible valeur mesurée ($1{,}0398$~g), devant CSP ($1{,}0906$~g) puis GREEDY ($1{,}4336$~g). Cette inversion énergie/carbone entre CSP et LLM s'explique par la sensibilité à la régionalisation de l'intensité carbone et confirme l'intérêt d'évaluer simultanément $E_{grid}$ et $CO_2$.
 
 \begin{table}[H]
     \centering
@@ -238,12 +243,14 @@ L'analyse (Table~\ref{tab:results_main}) démontre que le CSP minimise drastique
     \label{tab:results_main}
     \begin{tabular}{lccc}
         \toprule
-        \textbf{Métrique} & \textbf{FFD} & \textbf{CSP} & \textbf{LLM} \\
+        \textbf{Métrique} & \textbf{GREEDY} & \textbf{CSP} & \textbf{LLM} \\
         \midrule
-        $E_{total}$ (Wh)       & 14861{,}6 & 9262{,}7 & 10864{,}9 \\
-        $\mathcal{L}_{e2e}$ (ms) & 25{,}0 & 17{,}0 & 21{,}0 \\
-        Validité (\%)        & 100 & 100 & 100 \\
-        $T_{solve}$ (s)      & $9{,}15\times10^{-4}$ & $1{,}32\times10^{-2}$ & 6{,}82 \\
+        Durée valide (min)    & 12{,}0 & 13{,}0 & 13{,}0 \\
+        $E_{grid}$ (Wh)       & 9{,}0381 & 7{,}3498 & 7{,}4600 \\
+        $CO_2$ (g)            & 1{,}4336 & 1{,}0906 & 1{,}0398 \\
+        $\widetilde{E}_{grid}$ (Wh/min) & 0{,}7532 & 0{,}5654 & 0{,}5738 \\
+        $\widetilde{CO}_2$ (g/min)      & 0{,}1195 & 0{,}0839 & 0{,}0800 \\
+        Validité (\%)         & 100 & 100 & 100 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -281,7 +288,7 @@ Le placement éco-efficient est très documenté dans le Cloud~\cite{beloglazov2
 \section{Conclusion et perspectives}
 \label{sec:conclusion}
 
-Cette étude évalue l'efficience énergétique de FFD, CSP et LLM pour le placement de services DSP. Adossés au modèle de Beloglazov et al.~\cite{beloglazov2012energy}, nous démontrons que le CSP fournit le meilleur compromis énergétique ($E_{total}=9262{,}7$, $\mathcal{L}_{e2e}=17$~ms). Le LLM trouve des solutions valides mais sous-optimales, tout en souffrant d'un surcoût opérationnel majeur ($E_{solver}=9{,}10\times10^{-3}$~Wh), ce qui motive des usages hybrides. 
+Cette étude évalue l'efficience énergétique de GREEDY, CSP et LLM pour le placement de services DSP. Adossés au modèle de Beloglazov et al.~\cite{beloglazov2012energy}, nos mesures montrent que le CSP obtient la meilleure énergie normalisée ($\widetilde{E}_{grid}=0{,}5654$~Wh/min), talonné par le LLM ($0{,}5738$~Wh/min), alors que GREEDY est nettement en retrait ($0{,}7532$~Wh/min). En parallèle, le LLM présente la plus faible empreinte carbone mesurée ($\widetilde{CO}_2=0{,}0800$~g/min), ce qui illustre le caractère multi-objectif de l'évaluation et la nécessité de reporter conjointement énergie et carbone. Le surcoût opérationnel du LLM au niveau solveur ($E_{solver}=9{,}10\times10^{-3}$~Wh) reste néanmoins un point limitant, ce qui motive des usages hybrides.
 
 Notre infrastructure a été conçue pour être intrinsèquement scalable. Nos perspectives ciblent donc : (i) la mise à l'épreuve de ces modèles sur des topologies Cloud massives ($K > 10$, $N > 20$), (ii) l'orchestration où le LLM sert uniquement d'amorce au CSP, et (iii) la connexion de flottes d'objets connectés (IoT) externes en périphérie pour collecter des relevés métrologiques en temps réel, renforçant la validation expérimentale de ces paradigmes.
 
