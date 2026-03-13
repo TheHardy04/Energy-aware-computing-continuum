@@ -16,9 +16,12 @@
 \title{Heuristique, CSP ou LLM ?
 Étude comparative du coût énergétique du placement de services multi-composants dans le Cloud}
 
-\author{Théo Hardy$^{1}$, Farah Aït-Salaht$^{1}$}
-\address{$^{1}$De Vinci Higher Education, De Vinci Research Center, Paris La Défense, France
+\author{Théo Hardy$^{1}$, Farah Aït-Salaht$^{1,2}$, Daniel Wladdimiro$^{1,2,3}$}
+\address{$^{1}$De Vinci Higher Education, Paris La Défense, France\\
+$^{2}$De Vinci Research Center, Paris La Défense, France\\
+$^{3}$Sorbonne Université, CNRS, LIP6, Paris, France\\
 theo.hardy@edu.devinci.fr}
+
 
 \date{}
 
@@ -61,7 +64,7 @@ Face aux heuristiques rapides mais sans garantie d'optimalité, et aux méthodes
 
 Une application DSP est modélisée par un graphe $G_a = (S, L)$. La source $s_0$ et les $K$ opérateurs sont caractérisés par un triplet $(\psi_i^{cpu}, \psi_i^{ram}, \lambda_i)$ dictant les besoins capacitaires et le débit. Chaque arc $(s_i, s_j) \in L$ porte un débit $d_{ij}$ assujetti à la limite de la bande passante, et une borne $\mathcal{L}_{max}$ contraint la latence bout-en-bout (Figure~\ref{fig:app_graph}).
 
-L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j$ est définie par ses capacités et son profil de consommation $(C_j^{cpu}, C_j^{ram}, P_{idle,j}, P_{max,j}, r_j)$. Chaque lien $(v_j,v_k)$ possède une latence $\ell_{jk}$ et une bande passante $\mathcal{B}_{jk}$. Notre déploiement GCP instancie ce modèle en 2 tiers (Table~\ref{tab:vms}, Figure~\ref{fig:infra_gcp}).
+L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j$ est définie par ses capacités et son profil de consommation $(C_j^{cpu}, C_j^{ram}, P_{idle,j}, P_{max,j}, r_j)$. Chaque lien $(v_j,v_k)$ possède une latence $\ell_{jk}$ et une bande passante $\mathcal{B}_{jk}$. Notre déploiement GCP instancie ce modèle sur 10 nœuds, avec un cœur Cloud relié à deux grappes Fog/Edge régionales (Table~\ref{tab:vms}, Figure~\ref{fig:infra_gcp}).
 
 \begin{figure}[H]
     \centering
@@ -101,7 +104,7 @@ L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j$ est
 \begin{table}[t]
     \centering
     \footnotesize
-    \caption{VMs GCE utilisées (instances SPOT hétérogènes)}
+    \caption{VMs GCE utilisées pour l'infrastructure à 10 nœuds (instances SPOT hétérogènes)}
     \label{tab:vms}
     \begin{tabularx}{\columnwidth}{l X c c c}
         \toprule
@@ -112,6 +115,11 @@ L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j$ est
         $v_2$ & e2-medium     & 2 &  4 & europe-west9-b \\
         $v_3$ & e2-small      & 1 &  2 & europe-west9-c \\
         $v_4$ & e2-micro      & 1 &  1 & europe-west9-a \\
+        $v_5$ & e2-standard-2 & 2 &  8 & europe-north2-a \\
+        $v_6$ & e2-medium     & 2 &  4 & europe-north2-a \\
+        $v_7$ & e2-small      & 1 &  2 & europe-north2-b \\
+        $v_8$ & e2-micro      & 1 &  1 & europe-north2-c \\
+        $v_9$ & e2-micro      & 1 &  1 & europe-north2-a \\
         \bottomrule
     \end{tabularx}
 \end{table}
@@ -120,32 +128,48 @@ L'infrastructure matérielle forme un graphe $G_p = (V, E)$. Chaque VM $v_j$ est
     \centering
     \begin{tikzpicture}[
         vm/.style={draw, rounded corners, fill=blue!10,
-            minimum width=2.45cm, minimum height=0.95cm,
+            minimum width=2.2cm, minimum height=0.85cm,
             font=\scriptsize, align=center},
         nb/.style={draw, rounded corners, densely dashed, fill=gray!12,
-            minimum width=2.2cm, minimum height=0.9cm,
+            minimum width=2.0cm, minimum height=0.8cm,
             font=\scriptsize, align=center},
         tier/.style={draw, rounded corners=4pt, densely dashed, inner sep=7pt},
         lnk/.style={-, line width=0.6pt}
     ]
-    \node[vm] (v0) at (0, 1.2) {$v_0$\\n2-standard-4\\4\,vCPU / 16\,Go\\{\tiny europe-west4-a}};
-    \node[vm] (v1) at (0, -1.8) {$v_1$\\e2-standard-2\\2\,vCPU / 8\,Go\\{\tiny europe-west9-a}};
-    \node[vm] (v2) at (-4.4, -5.0) {$\mathbf{v_2}$ [DZ]\\e2-medium\\2\,vCPU / 4\,Go\\{\tiny europe-west9-b}};
-    \node[vm] (v3) at (0, -5.0) {$v_3$\\e2-small\\1\,vCPU / 2\,Go\\{\tiny europe-west9-c}};
-    \node[vm] (v4) at (4.4, -5.0) {$v_4$\\e2-micro\\1\,vCPU / 1\,Go\\{\tiny europe-west9-a}};
-    \node[nb]  (nb) at (5.2, 1.3) {Storm~Nimbus\\e2-medium\\{\tiny europe-west9-a}};
+    \node[vm] (v0) at (0, 2.4) {$v_0$\\n2-standard-4\\4\,vCPU / 16\,Go\\{\tiny europe-west4-a}};
+
+    \node[vm] (v1) at (-4.8, -0.6) {$v_1$\\e2-standard-2\\2\,vCPU / 8\,Go\\{\tiny europe-west9-a}};
+    \node[vm] (v2) at (-7.2, -3.8) {$\mathbf{v_2}$ [DZ]\\e2-medium\\2\,vCPU / 4\,Go\\{\tiny europe-west9-b}};
+    \node[vm] (v3) at (-4.8, -3.8) {$v_3$\\e2-small\\1\,vCPU / 2\,Go\\{\tiny europe-west9-c}};
+    \node[vm] (v4) at (-2.4, -3.8) {$v_4$\\e2-micro\\1\,vCPU / 1\,Go\\{\tiny europe-west9-a}};
+
+    \node[vm] (v5) at (2.3, -0.6) {$v_5$\\e2-standard-2\\2\,vCPU / 8\,Go\\{\tiny europe-north2-a}};
+    \node[vm] (v6) at (0.5, -3.8) {$v_6$\\e2-medium\\2\,vCPU / 4\,Go\\{\tiny europe-north2-a}};
+    \node[vm] (v7) at (3.1, -3.8) {$v_7$\\e2-small\\1\,vCPU / 2\,Go\\{\tiny europe-north2-b}};
+    \node[vm] (v8) at (5.7, -3.8) {$v_8$\\e2-micro\\1\,vCPU / 1\,Go\\{\tiny europe-north2-c}};
+    \node[vm] (v9) at (6.3, -0.6) {$v_9$\\e2-micro\\1\,vCPU / 1\,Go\\{\tiny europe-north2-a}};
+
+    \node[nb]  (nb) at (3.8, 2.4) {Storm~Nimbus\\e2-medium\\{\tiny europe-west9-a}};
     \begin{scope}[on background layer]
         \node[tier, fill=blue!4,  fit=(v0),
               label=above:{\scriptsize\itshape Cloud -- europe-west4}] {};
         \node[tier, fill=green!4, fit=(v1)(v2)(v3)(v4),
               label=below:{\scriptsize\itshape Fog/Edge -- europe-west9}] {};
+        \node[tier, fill=yellow!8, fit=(v5)(v6)(v7)(v8)(v9),
+              label=below:{\scriptsize\itshape Fog/Edge -- europe-north2}] {};
     \end{scope}
-    \draw[lnk] (v0.south) -- node[font=\scriptsize, right, pos=0.52] {1\,Gbps / 12\,ms} (v1.north);
-    \draw[lnk] (v1.south west) -- node[font=\scriptsize, above left, pos=0.5] {500\,Mbps / 2\,ms} (v2.north);
-    \draw[lnk] (v1.south) -- node[font=\scriptsize, right, pos=0.5] {500\,Mbps / 2\,ms} (v3.north);
-    \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {500\,Mbps / 1\,ms} (v4.north);
+    \draw[lnk] (v0.south west) -- node[font=\scriptsize, above left, pos=0.5] {1\,Gbps / 12\,ms} (v1.north);
+    \draw[lnk] (v0.south east) -- node[font=\scriptsize, above right, pos=0.5] {1\,Gbps / 12\,ms} (v5.north);
+    \draw[lnk] (v1.east) -- node[font=\scriptsize, above, pos=0.5] {1\,Gbps / 30\,ms} (v5.west);
+    \draw[lnk] (v1.south west) -- node[font=\scriptsize, above left, pos=0.5] {\shortstack{500\,Mbps\\2\,ms}} (v2.north);
+    \draw[lnk] (v1.south) -- node[font=\scriptsize, right, pos=0.5] {\shortstack{500\,Mbps\\2\,ms}} (v3.north);
+    \draw[lnk] (v1.south east) -- node[font=\scriptsize, above right, pos=0.5] {\shortstack{500\,Mbps\\1\,ms}} (v4.north);
+    \draw[lnk] (v5.south west) -- node[font=\scriptsize, above left, pos=0.5] {\shortstack{500\,Mbps\\2\,ms}} (v6.north);
+    \draw[lnk] (v5.south) -- node[font=\scriptsize, right, pos=0.5] {\shortstack{500\,Mbps\\2\,ms}} (v7.north);
+    \draw[lnk] (v5.south east) -- node[font=\scriptsize, above, pos=0.4] {\shortstack{500\,Mbps\\2\,ms}} (v8.north);
+    \draw[lnk] (v5.east) -- node[font=\scriptsize, above, pos=0.5] {\shortstack{500\,Mbps\\2\,ms}} (v9.west);
     \end{tikzpicture}
-    \caption{Topologie GCP. $v_2$ héberge $s_0$ (contrainte DZ).}
+    \caption{Topologie GCP à 10 nœuds. $v_2$ héberge $s_0$ (contrainte DZ) ; les deux grappes Fog/Edge sont reliées via le cœur Cloud et un lien inter-zone $v_1 \leftrightarrow v_5$.}
     \label{fig:infra_gcp}
 \end{figure}
 
@@ -234,7 +258,7 @@ Les métriques sont collectées à chaque intervalle $\Delta t{=}60$~s depuis Go
 \end{table}
 
 \subsection{Analyse des performances}
-Les résultats expérimentaux (Table~\ref{tab:results_main}) montrent un écart réduit entre CSP et LLM, et une dégradation nette de l'heuristique GREEDY. En énergie normalisée, le CSP est premier ($\widetilde{E}_{grid}=0{,}5654$~Wh/min), suivi de très près par le LLM ($0{,}5738$~Wh/min, soit +1{,}49\% vs CSP), tandis que GREEDY est significativement moins efficace ($0{,}7532$~Wh/min, soit +33{,}21\% vs CSP). Côté carbone total, le LLM obtient la plus faible valeur mesurée ($1{,}0398$~g), devant CSP ($1{,}0906$~g) puis GREEDY ($1{,}4336$~g). Cette inversion énergie/carbone entre CSP et LLM s'explique par la sensibilité à la régionalisation de l'intensité carbone et confirme l'intérêt d'évaluer simultanément $E_{grid}$ et $CO_2$.
+Les résultats expérimentaux sur l'infrastructure initiale à 5 nœuds (Table~\ref{tab:results_main}) montrent un écart réduit entre CSP et LLM, et une dégradation nette de l'heuristique GREEDY. En énergie normalisée, le CSP est premier ($\widetilde{E}_{grid}=0{,}5654$~Wh/min), suivi de très près par le LLM ($0{,}5738$~Wh/min, soit +1{,}49\% vs CSP), tandis que GREEDY est significativement moins efficace ($0{,}7532$~Wh/min, soit +33{,}21\% vs CSP). Côté carbone total, le LLM obtient la plus faible valeur mesurée ($1{,}0398$~g), devant CSP ($1{,}0906$~g) puis GREEDY ($1{,}4336$~g). Cette inversion énergie/carbone entre CSP et LLM s'explique par la sensibilité à la régionalisation de l'intensité carbone et confirme l'intérêt d'évaluer simultanément $E_{grid}$ et $CO_2$.
 
 \begin{table}[H]
     \centering
@@ -251,6 +275,29 @@ Les résultats expérimentaux (Table~\ref{tab:results_main}) montrent un écart 
         $\widetilde{E}_{grid}$ (Wh/min) & 0{,}7532 & 0{,}5654 & 0{,}5738 \\
         $\widetilde{CO}_2$ (g/min)      & 0{,}1195 & 0{,}0839 & 0{,}0800 \\
         Validité (\%)         & 100 & 100 & 100 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Sur l'infrastructure étendue à 10 nœuds (Table~\ref{tab:results_infra10}), la hiérarchie se renforce. Le CSP conserve la meilleure efficacité énergétique avec $\widetilde{E}_{grid}=0{,}7430$~Wh/min, immédiatement suivi par le LLM ($0{,}7461$~Wh/min, soit +0{,}42\% vs CSP), alors que GREEDY se dégrade fortement ($1{,}2889$~Wh/min, soit +73{,}47\% vs CSP). Contrairement au cas 5 nœuds, le CSP domine également l'empreinte carbone totale ($0{,}9285$~g) et normalisée ($0{,}0714$~g/min), le LLM restant quasiment confondu ($0{,}9296$~g ; $0{,}0715$~g/min). L'écart provient principalement de la latence moyenne des chemins déployés : 3{,}0~ms pour CSP et LLM, contre 12{,}5~ms pour GREEDY, ce qui accroît fortement la composante réseau de l'énergie.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \caption{Comparaison des approches sur l'infrastructure à 10 nœuds}
+    \label{tab:results_infra10}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Métrique} & \textbf{GREEDY} & \textbf{CSP} & \textbf{LLM} \\
+        \midrule
+        Durée valide (min) & 13{,}0 & 13{,}0 & 13{,}0 \\
+        Latence moy. chemin (ms) & 12{,}5 & 3{,}0 & 3{,}0 \\
+        $E_{grid}$ (Wh) & 16{,}7560 & 9{,}6588 & 9{,}6997 \\
+        $CO_2$ (g) & 1{,}9076 & 0{,}9285 & 0{,}9296 \\
+        $\widetilde{E}_{grid}$ (Wh/min) & 1{,}2889 & 0{,}7430 & 0{,}7461 \\
+        $\widetilde{CO}_2$ (g/min) & 0{,}1467 & 0{,}0714 & 0{,}0715 \\
+        $E_{solver}$ (Wh) & 0{,}0000 & 0{,}0004 & 0{,}0096 \\
+        Validité (\%) & 100 & 100 & 100 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -288,7 +335,7 @@ Le placement éco-efficient est très documenté dans le Cloud~\cite{beloglazov2
 \section{Conclusion et perspectives}
 \label{sec:conclusion}
 
-Cette étude évalue l'efficience énergétique de GREEDY, CSP et LLM pour le placement de services DSP. Adossés au modèle de Beloglazov et al.~\cite{beloglazov2012energy}, nos mesures montrent que le CSP obtient la meilleure énergie normalisée ($\widetilde{E}_{grid}=0{,}5654$~Wh/min), talonné par le LLM ($0{,}5738$~Wh/min), alors que GREEDY est nettement en retrait ($0{,}7532$~Wh/min). En parallèle, le LLM présente la plus faible empreinte carbone mesurée ($\widetilde{CO}_2=0{,}0800$~g/min), ce qui illustre le caractère multi-objectif de l'évaluation et la nécessité de reporter conjointement énergie et carbone. Le surcoût opérationnel du LLM au niveau solveur ($E_{solver}=9{,}10\times10^{-3}$~Wh) reste néanmoins un point limitant, ce qui motive des usages hybrides.
+Cette étude évalue l'efficience énergétique de GREEDY, CSP et LLM pour le placement de services DSP. Adossés au modèle de Beloglazov et al.~\cite{beloglazov2012energy}, nos mesures montrent sur 5 nœuds un duel serré entre CSP et LLM, mais l'extension à 10 nœuds confirme plus nettement l'avantage du CSP : $\widetilde{E}_{grid}=0{,}7430$~Wh/min contre $0{,}7461$~Wh/min pour le LLM et $1{,}2889$~Wh/min pour GREEDY. Sur cette topologie plus large, le CSP obtient également la meilleure empreinte carbone normalisée ($\widetilde{CO}_2=0{,}0714$~g/min), tandis que le LLM reste extrêmement proche ($0{,}0715$~g/min). Le surcoût opérationnel du LLM au niveau solveur ($E_{solver}=9{,}6\times10^{-3}$~Wh sur l'infrastructure 10 nœuds) reste néanmoins un point limitant, ce qui motive des usages hybrides.
 
 Notre infrastructure a été conçue pour être intrinsèquement scalable. Nos perspectives ciblent donc : (i) la mise à l'épreuve de ces modèles sur des topologies Cloud massives ($K > 10$, $N > 20$), (ii) l'orchestration où le LLM sert uniquement d'amorce au CSP, et (iii) la connexion de flottes d'objets connectés (IoT) externes en périphérie pour collecter des relevés métrologiques en temps réel, renforçant la validation expérimentale de ces paradigmes.
 
