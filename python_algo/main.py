@@ -248,6 +248,13 @@ if __name__ == '__main__':
         logger.info("Exporting evaluation metrics to CSV...")
         metrics_filename = args.metrics_csv
         os.makedirs(os.path.dirname(metrics_filename), exist_ok=True)
+        path_taken = json.dumps(
+            {
+                f"{u}->{v}": path
+                for (u, v), path in sorted(result.paths.items())
+            },
+            separators=(",", ":")
+        )
         ResultExporter.export_metrics_to_csv(
             metrics,
             filename=metrics_filename,
@@ -257,6 +264,7 @@ if __name__ == '__main__':
                 'app': os.path.basename(args.app),
                 'status': result.meta.get('status', ''),
                 'resolution_time_s': resolution_time_s,
+                'path_taken': path_taken,
             },
             append=True,
         )

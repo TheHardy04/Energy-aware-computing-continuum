@@ -1,0 +1,11 @@
+host, vm
+0, cloud-core-1
+1, fog-gateway-1
+2, worker-edge-1
+3, worker-edge-light-1
+4, worker-iot-1
+5, fog-gateway-2
+6, worker-edge-2
+7, worker-edge-light-2
+8, worker-iot-2
+9, worker-iot-3

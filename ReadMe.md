@@ -1,29 +1,75 @@
 # Energy-aware Computing Continuum
 
-This repository contains the code and research paper for an Energy-aware Service Placement framework in the Cloud-Edge Computing Continuum.
+Energy-aware service placement for Cloud, Fog, and Edge infrastructures. The repository contains a Python placement framework, GCP deployment helpers, and an Apache Storm integration layer.
 
-## Structure
+## Modules
 
-- **[python_algo](/python_algo/)**: Source code for the placement algorithms, graph models, and main execution script.
-- **[gcp_automations](/gcp_automations/)**: Windows-friendly scripts to deploy/reuse GCP master and worker VMs from infrastructure properties.
-- **[paper](/paper/)**: LaTeX source code for the research paper "Energy-Aware Service Placement in Edge".
-- **[storm-scheduler](/storm-scheduler/)**: Implementation of the placement algorithms integrated with Apache Storm for real-time stream processing.
+- [python_algo](python_algo): placement algorithms, evaluators, properties files, and CSV exports.
+- [gcp_automations](gcp_automations): GCP VM provisioning and Monitoring data collection.
+- [storm-scheduler](storm-scheduler): Apache Storm topologies and custom schedulers.
+- [scripts](scripts): helper scripts to build, start, stop, and submit Storm jobs.
 
-## GCP Deployment (Properties -> VMs)
+## Prerequisites
 
-Use the deployment script to provision the Storm cluster directly from a properties file:
+- Python 3.12+
+- Java 17+
+- Maven 3.9+
+- Apache Storm 2.8.3 for cluster execution
+- Google Cloud SDK for GCP deployment
 
-```bash
-python .\gcp_automations\deploy_gcp_from_properties.py .\python_algo\properties\Infra_5nodes_GCP.properties
+## Quick Start
+
+### Run a placement locally
+
+```powershell
+cd python_algo
+pip install -r requirements.txt
+python main.py --strategy CSP --verbose
 ```
 
-Current behavior:
+### Run a placement with explicit properties
 
-- Idempotent deployment: existing VMs are detected and reused.
-- Automatic firewall setup for Storm internal ports and optional external UI access on `8080`.
-- Dedicated Nimbus master + worker nodes created from host CPU/RAM tuples.
-- Worker startup is optimized for Storm runtime and no longer installs Python/venv dependencies.
+```powershell
+cd python_algo
+python main.py --strategy GreedyFirstFit --infra properties/Infra_5nodes_GCP.properties --app properties/Appli_5comps_GCP.properties --placement-csv ..\results\placement.csv --metrics-csv ..\results\metrics_GreedyFirstFit.csv
+```
 
-## Acknowledgement
+### Deploy a GCP infrastructure from an infra properties file
 
-TBD
+```powershell
+pip install -r gcp_automations/requirements.txt
+python gcp_automations/deploy_gcp_from_properties.py python_algo/properties/Infra_5nodes_GCP.properties
+```
+
+### Submit a Storm topology from an application properties file
+
+```bash
+./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_4comps.properties DemoTopology
+```
+
+### Run placement and topology submission together
+
+```bash
+./scripts/launch_placement_and_topology.sh ./python_algo/properties/Infra_5nodes_GCP.properties ./python_algo/properties/Appli_5comps_GCP.properties ./python_algo/properties/Infra_5nodes_GCP_mapping.csv CSP
+```
+
+## Typical Workflow
+
+1. Define infrastructure and application inputs in [python_algo/properties](python_algo/properties).
+2. Run a placement strategy with [python_algo/main.py](python_algo/main.py).
+3. Export placement and metrics CSV files to [results](results) or [results_infra10](results_infra10).
+4. If needed, provision matching GCP VMs with [gcp_automations/deploy_gcp_from_properties.py](gcp_automations/deploy_gcp_from_properties.py).
+5. Build and submit the Storm topology with the scripts in [scripts](scripts).
+
+## Outputs
+
+- Placement mapping CSV: `results/placement.csv` unless overridden.
+- Metrics CSV: appended to the path passed with `--metrics-csv`.
+- Example benchmark outputs already exist in [results](results) and [results_infra10](results_infra10).
+
+## Module Docs
+
+- [python_algo/ReadMe.md](python_algo/ReadMe.md)
+- [gcp_automations/README.md](gcp_automations/README.md)
+- [storm-scheduler/README.md](storm-scheduler/README.md)
+- [scripts/README.md](scripts/README.md)

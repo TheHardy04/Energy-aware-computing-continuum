@@ -1,5 +1,114 @@
 # Python Placement Framework
 
+Placement and evaluation engine for service graphs over heterogeneous Cloud/Fog/Edge infrastructures.
+
+## Install
+
+```powershell
+cd python_algo
+pip install -r requirements.txt
+```
+
+## Basic Usage
+
+```powershell
+python main.py --strategy CSP
+```
+
+### Common examples
+
+```powershell
+python main.py --plot --verbose
+python main.py --strategy GreedyFirstFit --infra properties/Infra_5nodes_GCP.properties --app properties/Appli_5comps_GCP.properties
+python main.py --strategy LLM --infra properties/Infra_5nodes_GCP.properties --app properties/Appli_5comps_GCP.properties --placement-csv ..\results\placement.csv --metrics-csv ..\results\metrics_LLM.csv
+```
+
+## CLI Options
+
+- `--strategy`: `CSP`, `LLM`, `GreedyFirstFit`, `GreedyFirstIterate`
+- `--infra`: infrastructure properties file
+- `--app`: application properties file
+- `--placement-csv`: output placement CSV path
+- `--metrics-csv`: output metrics CSV path
+- `--plot`: draw infrastructure and service graphs
+- `--verbose`: print graph, routing, and evaluation details
+
+Default inputs:
+
+- `properties/Infra_16nodes_fog3tier.properties`
+- `properties/Appli_8comps_smartbuilding.properties`
+
+## LLM Usage
+
+The LLM strategy auto-detects a provider from the environment.
+
+Supported providers:
+
+- OpenAI via `OPENAI_API_KEY`
+- Anthropic via `ANTHROPIC_API_KEY`
+- Gemini via `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- Ollama via local server on `OLLAMA_HOST` or default `http://localhost:11434`
+
+Example with OpenAI:
+
+```powershell
+$env:OPENAI_API_KEY = "<your-key>"
+$env:OPENAI_MODEL = "gpt-4o-mini"
+python main.py --strategy LLM --infra properties/Infra_5nodes_GCP.properties --app properties/Appli_5comps_GCP.properties
+```
+
+Example with Ollama:
+
+```powershell
+$env:OLLAMA_HOST = "http://localhost:11434"
+python main.py --strategy LLM
+```
+
+## Energy Model Overrides
+
+Use a different GCP energy properties file:
+
+```powershell
+$env:CSP_ENERGY_PROPERTIES = "D:\path\to\Energy_GCP.properties"
+python main.py --strategy CSP
+```
+
+Optional solver energy tuning:
+
+```powershell
+$env:P_CPU_WATTS = "45"
+$env:LLM_SOLVER_UNCERTAINTY = "3"
+python main.py --strategy LLM
+```
+
+## Properties Files
+
+- Infrastructure files live in [properties](properties)
+- Application files live in [properties](properties)
+- GCP energy constants live in [properties/Energy_GCP.properties](properties/Energy_GCP.properties)
+
+Example property pair:
+
+```powershell
+python main.py --strategy CSP --infra properties/Infra_5nodes_GCP.properties --app properties/Appli_5comps_GCP.properties
+```
+
+## Outputs
+
+- Placement CSV contains component-to-host mappings.
+- Metrics CSV contains energy, latency, routing path, solver energy, and resource usage.
+
+Example output paths:
+
+```powershell
+python main.py --strategy CSP --placement-csv ..\results\placement.csv --metrics-csv ..\results\metrics_CSP.csv
+```
+
+## Related Modules
+
+- GCP deployment helpers: [../gcp_automations/README.md](../gcp_automations/README.md)
+- Storm integration: [../storm-scheduler/README.md](../storm-scheduler/README.md)# Python Placement Framework
+
 ## Prerequisites
 
 - Python 3.12+

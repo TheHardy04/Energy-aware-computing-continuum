@@ -2,6 +2,8 @@ __pycache__/
 
 .vscode/
 .idea/
+.venv
+
 
 # Ignore Storm logs and temp data
 logs/

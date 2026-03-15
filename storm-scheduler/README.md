@@ -1,112 +1,72 @@
 # Storm Scheduler
 
-This project implements energy-aware scheduling for Apache Storm in fog/edge/cloud computing continuum environments.
+Apache Storm integration layer for the placement framework. It contains custom schedulers plus Java entrypoints that build a topology from application properties files.
 
-## 🚀 Quick Start
+## Requirements
 
-### Submit a Topology from Properties File (NEW!)
+- Java 17+
+- Maven 3.9+
+- Apache Storm 2.8.3
+
+## Build
 
 ```bash
-# Build and submit a 4-component application
-./scripts/launch-topology-from-csv.sh ../python_algo/properties/Appli_4comps.properties MyApp
-
-# Submit a DCNS surveillance application (10 components)
-./scripts/launch-topology-from-csv.sh ../python_algo/properties/Appli_10comps_dcns.properties DCNS
+cd storm-scheduler
+mvn clean package
 ```
 
-### Submit Test Topology
+Artifacts:
+
+- `target/storm-scheduler-1.0-SNAPSHOT.jar`
+- `target/storm-scheduler-1.0-SNAPSHOT-all.jar`
+
+## Run a Topology From Properties
+
+From the repository root:
+
+```bash
+./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_4comps.properties DemoTopology
+./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_10comps_dcns.properties DCNS
+```
+
+This script:
+
+- builds the Maven module
+- checks that the `storm` CLI is available
+- submits `fr.dvrc.thardy.topology.TopologyFromProperties`
+
+## Submit the Test Topology
 
 ```bash
 ./scripts/test-topology-launch.sh
 ```
 
-## Features
+## Components
 
-1. **TopologyFromProperties** - Generate Storm topologies from application properties files
-2. **TestTopology** - Synthetic 6-bolt benchmark topology
-3. **Custom Schedulers** - Energy-aware scheduling algorithms
-4. **Shell Scripts** - Convenient cluster management (see [scripts/README.md](scripts/README.md))
+- `fr.dvrc.thardy.topology.TopologyFromProperties`: creates a topology from an app properties file
+- `fr.dvrc.thardy.topology.TestTopology`: synthetic test topology
+- `fr.dvrc.thardy.scheduler.CsvOneToOneScheduler`: placement-aware scheduler using CSV inputs
+- `fr.dvrc.thardy.scheduler.DefaultSchedulerRework`: custom scheduler variant built on Storm defaults
 
----
+## Cluster Notes
 
-## Installation
+- The scheduler module is designed to work with the helper scripts in [../scripts/README.md](../scripts/README.md).
+- For GCP deployments, worker bootstrap is handled by [../gcp_automations/vm_startup.sh](../gcp_automations/vm_startup.sh).
 
-To run the Storm Scheduler, you need to have Apache Storm installed and set up. You can find the installation instructions on the official [Apache Storm website](https://storm.apache.org/index.html).
+## Storm UI Tunnel
 
-Version `2.8.3` was used for testing.
-Ubuntu `22.04` and `24.04` was used for testing.
-
-## Apache Storm Installation Steps
-
-```shell
-# Update package list and install Java 17 
-apt-get update
-apt-get install -y openjdk-17-jdk-headless wget tar
-
-# Verify Java installation
-java -version
-
-# --- 2. INSTALL ZOOKEEPER ---
-apt-get install -y zookeeperd
-
-# --- 3. DOWNLOAD & INSTALL APACHE STORM 2.8.3 ---
-STORM_VER="2.8.3"
-wget https://downloads.apache.org/storm/apache-storm-$STORM_VER/apache-storm-$STORM_VER.tar.gz
-tar -zxf apache-storm-$STORM_VER.tar.gz
-mv apache-storm-$STORM_VER /usr/local/storm
-
-# Add binaries to PATH
-export PATH=$PATH:/usr/local/storm/bin
+```bash
+gcloud compute ssh storm-nimbus --project=<PROJECT_ID> --zone=<ZONE> -- -L 8080:localhost:8080
 ```
 
-For GCP worker nodes provisioned with `gcp_automations/vm_startup.sh`, startup is intentionally minimal:
-
-- Java/Storm runtime dependencies only
-- No Python/venv bootstrap on workers
-- Faster first boot for Storm supervisor nodes
-
-## GCP
-
-### Create a GCP VM
-
-When creating a VM in GCP, make sure to allow HTTP and HTTPS traffic. You can do this by selecting the appropriate checkboxes in the "Firewall" section of the VM creation form.
-
-You can use the `vm_startup.sh` script to automate the installation of Apache Storm on the VM. 
-
-### To see UI
-
-On master node, run the following command to forward the port for Storm UI:
-
-```shell
-gcloud compute ssh storm-nimbus \
-    --project=<PROJECT_ID> \
-    --zone=<ZONE> \
-    -- -L 8080:localhost:8080
-```
+Then open `http://localhost:8080`.
 
 ## Troubleshooting
 
-### Permission Denied Error for Logs
+If log files are not writable, set a writable log directory in your `.env` file:
 
-If you encounter an error like:
-```
-Permission denied: /path/to/logs/supervisor.log
-```
-
-**Solution 1: Manually fix permissions**
 ```bash
-# Create logs directory if it doesn't exist
-mkdir -p logs
-
-# Give yourself write permissions
-chmod -R u+rwx logs
-
-# Or, if needed, take ownership
-sudo chown -R $USER logs
-```
-
-**Solution 2: Use a different log directory**
-Edit the `.env` file and add:
-```
 LOG_DIR=/tmp/storm-logs
 ```
+
+If the `storm` command is missing, add `$STORM_HOME/bin` to `PATH` before using the helper scripts.
