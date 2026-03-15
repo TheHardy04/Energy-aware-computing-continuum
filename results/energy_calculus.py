@@ -19,7 +19,6 @@ POWER_PROFILES = {
 
 # Network energy factor (Joules per Byte transferred)
 # 0.00005 J/Byte = 50 kJ / GB (Average Edge/Cloud IP core routing footprint)
-# Validated by Aslan et al. (2017) projections and IEA recent reports (~0.014 kWh/GB)
 NETWORK_ENERGY_PER_BYTE = 0.00005
 
 # Time between each metric sample in your data (in seconds)
