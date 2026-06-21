@@ -1,6 +1,7 @@
 networkx[default]
 javaproperties
 PyQt5
+google-cloud-monitoring==2.31.0
 ortools==9.15.6755
 google-genai==1.65.0
 anthropic==0.84.0

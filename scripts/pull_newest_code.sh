@@ -1,4 +1,5 @@
 #!/bin/bash
+## This script is for me to facilitate development and testing. It pulls the latest code from the Git repository and ensures that all scripts are executable.
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

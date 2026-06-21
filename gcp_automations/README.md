@@ -36,6 +36,15 @@ What the deploy script does:
 - creates Storm firewall rules if missing
 - creates one `storm-nimbus` master VM
 - creates worker VMs from CPU and RAM tuples in the properties file
+- applies optional per-node NetEm shaping when `latency_ms` and `bandwidth_mbit` are present in the infra file
+
+### NetEm inputs
+
+The deploy script now derives per-node network shaping from the existing `network.topology` block in the infra properties file. It uses the topology latency and bandwidth values to compute a host-level NetEm profile, then passes that profile to VM metadata and re-applies it over SSH for reused VMs.
+
+If `network.topology` is missing, the script falls back to optional node-level latency and bandwidth lists for backward compatibility.
+
+The startup scripts clear any existing root qdisc before adding a new `netem` rule.
 
 ## Collect VM Metrics
 

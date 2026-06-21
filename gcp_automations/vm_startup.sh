@@ -20,6 +20,48 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+read_metadata_attribute() {
+    local attribute_name="$1"
+    curl -fsS -H "Metadata-Flavor: Google" \
+        "http://metadata.google.internal/computeMetadata/v1/instance/attributes/${attribute_name}" \
+        2>/dev/null | tr -d '\r\n' || true
+}
+
+NETEM_LATENCY_MS="$(read_metadata_attribute netem-latency-ms)"
+NETEM_BANDWIDTH_MBIT="$(read_metadata_attribute netem-bandwidth-mbit)"
+
+get_primary_network_interface() {
+    local interface_name
+    interface_name=$(ip route show default 2>/dev/null | head -n 1 | cut -d' ' -f5)
+    if [[ -z "$interface_name" ]]; then
+        interface_name="ens4"
+    fi
+    echo "$interface_name"
+}
+
+apply_netem_controls() {
+    local interface_name tc_command
+    interface_name=$(get_primary_network_interface)
+
+    sudo tc qdisc del dev "$interface_name" root 2>/dev/null || true
+
+    if [[ -z "$NETEM_LATENCY_MS" && -z "$NETEM_BANDWIDTH_MBIT" ]]; then
+        echo "No NetEm metadata found; cleared existing traffic control rules on $interface_name."
+        return 0
+    fi
+
+    tc_command=(sudo tc qdisc add dev "$interface_name" root netem)
+    if [[ -n "$NETEM_LATENCY_MS" ]]; then
+        tc_command+=(delay "${NETEM_LATENCY_MS}ms")
+    fi
+    if [[ -n "$NETEM_BANDWIDTH_MBIT" ]]; then
+        tc_command+=(rate "${NETEM_BANDWIDTH_MBIT}mbit")
+    fi
+
+    "${tc_command[@]}"
+    sudo tc qdisc show dev "$interface_name" || true
+}
+
 install_worker_systemd_units() {
     echo "Configuring systemd units for worker services..."
 
@@ -51,6 +93,7 @@ EOF
 # Skip if already installed (for VM restarts)
 if [[ -f "/usr/local/storm/bin/storm" ]]; then
     echo "Storm already installed, skipping setup"
+    apply_netem_controls
     install_worker_systemd_units
     echo "Setup completed at: $(date)"
     echo "GCP_STARTUP_SCRIPT_STATUS: SUCCESS"
@@ -78,11 +121,11 @@ echo "Installing Java, Git, Maven, and other tools..."
 apt-get update -qq || apt-get update  # Refresh right before install to avoid stale 404s
 # Pre-seed iperf3 to start as daemon automatically (suppresses interactive prompt)
 echo "iperf3 iperf3/start_daemon boolean true" | debconf-set-selections
-apt-get install -y -qq openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim iperf3 || {
+apt-get install -y -qq openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim iperf3 iproute2 || {
     echo "Package installation encountered errors, attempting to fix..."
     apt-get update
     apt-get install -f -y
-    apt-get install -y --fix-missing openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim iperf3
+    apt-get install -y --fix-missing openjdk-17-jdk-headless wget curl tar git maven iputils-ping vim iperf3 iproute2
 }
 
 # Zookeeper is not needed on worker nodes (only on master)
@@ -230,6 +273,8 @@ chown storm:storm /home/storm/.env /home/storm/.bashrc
 # Create placement CSV directory
 mkdir -p /etc/storm
 chmod 755 /etc/storm
+
+apply_netem_controls
 
 echo "=========================================="
 echo "✓ Storm WORKER setup complete!"
