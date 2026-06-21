@@ -363,7 +363,7 @@ public class TopologyFromProperties {
     public static void main(String[] args) throws Exception {
         if (args == null || args.length < 1) {
             System.err.println("Usage: TopologyFromProperties <propertiesFile> [topologyName]");
-            System.err.println("Example: TopologyFromProperties ../python_algo/properties/Appli_4comps.properties MyTopology");
+            System.err.println("Example: TopologyFromProperties ../configs/app/Appli_4comps.properties MyTopology");
             System.exit(1);
         }
 

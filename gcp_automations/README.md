@@ -21,13 +21,13 @@ pip install -r gcp_automations/requirements.txt
 Creates or reuses a dedicated Nimbus VM plus worker VMs inferred from `hosts.configuration` and `hosts.zones`.
 
 ```powershell
-python gcp_automations/deploy_gcp_from_properties.py python_algo/properties/Infra_5nodes_GCP.properties
+python gcp_automations/deploy_gcp_from_properties.py configs/infra/Infra_5nodes_GCP.properties
 ```
 
 Example with a larger topology:
 
 ```powershell
-python gcp_automations/deploy_gcp_from_properties.py python_algo/properties/infra_10nodes_smartcity_GCP.properties
+python gcp_automations/deploy_gcp_from_properties.py configs/infra/infra_10nodes_smartcity_GCP.properties
 ```
 
 What the deploy script does:
@@ -42,13 +42,13 @@ What the deploy script does:
 Fetch CPU and network metrics for the VMs described by an infra properties file.
 
 ```powershell
-python gcp_automations/gcp_vm_monitoring.py --infra python_algo/properties/Infra_5nodes_GCP.properties --window-minutes 15
+python gcp_automations/gcp_vm_monitoring.py --infra configs/infra/Infra_5nodes_GCP.properties --window-minutes 15
 ```
 
 Example with explicit project:
 
 ```powershell
-python gcp_automations/gcp_vm_monitoring.py --project-id <gcp-project> --infra python_algo/properties/Infra_5nodes_GCP.properties --window-minutes 30
+python gcp_automations/gcp_vm_monitoring.py --project-id <gcp-project> --infra configs/infra/Infra_5nodes_GCP.properties --window-minutes 30
 ```
 
 ## Files

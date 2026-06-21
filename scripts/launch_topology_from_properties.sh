@@ -5,7 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get the project root (parent of scripts directory)
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-STORM_SCHEDULER_DIR="$PROJECT_ROOT/storm-scheduler"
+STORM_SCHEDULER_DIR="$PROJECT_ROOT/services/java-storm-scheduler"
 
 # Variables
 SCHEDULER_JAR="target/storm-scheduler-1.0-SNAPSHOT.jar"
@@ -16,20 +16,20 @@ if [ $# -lt 1 ]; then
     echo "Usage: $0 <properties_file> [topology_name]"
     echo ""
     echo "Example:"
-    echo "  $0 $PROJECT_ROOT/python_algo/properties/Appli_4comps.properties MyTopology"
-    echo "  $0 $PROJECT_ROOT/python_algo/properties/Appli_10comps_dcns.properties DCNS"
+    echo "  $0 $PROJECT_ROOT/configs/app/Appli_4comps.properties MyTopology"
+    echo "  $0 $PROJECT_ROOT/configs/app/Appli_10comps_dcns.properties DCNS"
     exit 1
 fi
 
 # Resolve properties file to absolute path before changing directories
 PROPERTIES_FILE="$1"
 if [[ "$PROPERTIES_FILE" != /* ]]; then
-    # If it's a relative path, resolve it from current directory
-    PROPERTIES_FILE="$(cd "$(dirname "$PROPERTIES_FILE")" 2>/dev/null && pwd)/$(basename "$PROPERTIES_FILE")"
+    PROPERTIES_FILE="$PROJECT_ROOT/$PROPERTIES_FILE"
 fi
+PROPERTIES_FILE="$(cd "$(dirname "$PROPERTIES_FILE")" 2>/dev/null && pwd)/$(basename "$PROPERTIES_FILE")"
 TOPOLOGY_NAME="${2:-TopologyFromProperties}"
 
-# Change to storm-scheduler module
+# Change to the Storm scheduler module
 cd "$STORM_SCHEDULER_DIR"
 
 # Check if properties file exists

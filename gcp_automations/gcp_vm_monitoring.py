@@ -10,7 +10,7 @@ Authentication (local development):
 
 Example:
   python gcp_automations/gcp_vm_monitoring.py \
-	  --infra python_algo/properties/Infra_5nodes_GCP.properties \
+	  --infra configs/infra/Infra_5nodes_GCP.properties \
 	  --window-minutes 15
 """
 

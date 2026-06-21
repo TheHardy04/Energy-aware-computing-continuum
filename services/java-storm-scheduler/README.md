@@ -11,7 +11,7 @@ Apache Storm integration layer for the placement framework. It contains custom s
 ## Build
 
 ```bash
-cd storm-scheduler
+cd services/java-storm-scheduler
 mvn clean package
 ```
 
@@ -25,8 +25,8 @@ Artifacts:
 From the repository root:
 
 ```bash
-./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_4comps.properties DemoTopology
-./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_10comps_dcns.properties DCNS
+./scripts/launch_topology_from_properties.sh ./configs/app/Appli_4comps.properties DemoTopology
+./scripts/launch_topology_from_properties.sh ./configs/app/Appli_10comps_dcns.properties DCNS
 ```
 
 This script:
@@ -51,7 +51,7 @@ This script:
 ## Cluster Notes
 
 - The scheduler module is designed to work with the helper scripts in [../scripts/README.md](../scripts/README.md).
-- For GCP deployments, worker bootstrap is handled by [../gcp_automations/vm_startup.sh](../gcp_automations/vm_startup.sh).
+- For GCP deployments, worker bootstrap is handled by [../../gcp_automations/vm_startup.sh](../../gcp_automations/vm_startup.sh).
 
 ## Storm UI Tunnel
 

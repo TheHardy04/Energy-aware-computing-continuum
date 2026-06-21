@@ -44,15 +44,15 @@ Starts ZooKeeper if needed, then Nimbus and the Storm UI.
 ### Submit a topology from an application properties file
 
 ```bash
-./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_4comps.properties DemoTopology
+./scripts/launch_topology_from_properties.sh ./configs/app/Appli_4comps.properties DemoTopology
 ```
 
 ### Run placement and submit the topology in one step
 
-This wrapper runs the Python placement, writes outputs to `results/`, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology.
+This wrapper runs the Python placement, writes outputs to `experiments/results/`, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology.
 
 ```bash
-./scripts/launch_placement_and_topology.sh ./python_algo/properties/Infra_5nodes_GCP.properties ./python_algo/properties/Appli_5comps_GCP.properties ./python_algo/properties/Infra_5nodes_GCP_mapping.csv CSP
+./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
 ```
 
 ### Submit the Java test topology
@@ -69,7 +69,7 @@ This wrapper runs the Python placement, writes outputs to `results/`, copies the
 
 ## Debug and Local Helpers
 
-Launch multiple local supervisors from `storm-scheduler/conf/supervisor*/`:
+Launch multiple local supervisors from `services/java-storm-scheduler/conf/supervisor*/`:
 
 ```bash
 ./scripts/deploy_local_supervisor_cluster.sh
@@ -86,15 +86,15 @@ Inspect supervisor identity and placement CSV resolution:
 A typical manual flow is:
 
 ```bash
-python ./python_algo/main.py --strategy CSP --infra ./python_algo/properties/Infra_5nodes_GCP.properties --app ./python_algo/properties/Appli_5comps_GCP.properties --placement-csv ./results/placement.csv --metrics-csv ./results/metrics_CSP.csv
+python ./services/python-placement/placement/main.py --strategy CSP --infra ./configs/infra/Infra_5nodes_GCP.properties --app ./configs/app/Appli_5comps_GCP.properties --placement-csv ./experiments/results/placement.csv --metrics-csv ./experiments/results/metrics_CSP.csv
 ./scripts/build_scheduler.sh
 ./scripts/start_master.sh
 ./scripts/start_worker.sh
-./scripts/launch_topology_from_properties.sh ./python_algo/properties/Appli_5comps_GCP.properties DemoTopology
+./scripts/launch_topology_from_properties.sh ./configs/app/Appli_5comps_GCP.properties DemoTopology
 ```
 
 ## Notes
 
 - `env.sh` is sourced by the other scripts and validates `STORM_HOME`.
-- `launch_placement_and_topology.sh` writes placement and metrics outputs to [../results](../results).
+- `launch_placement_and_topology.sh` writes placement and metrics outputs to [../experiments/results](../experiments/results).
 - The combined wrapper expects the Storm config created by the GCP startup scripts, where `csv.scheduler.file` points to `/etc/storm/placement.csv`.

@@ -230,7 +230,7 @@ sudo -u storm python3 -m venv /home/storm/venv
 chown -R storm:storm /home/storm/venv
 source /home/storm/venv/bin/activate
 pip install --upgrade pip || echo "⚠ Warning: pip upgrade failed, continuing with existing pip version"
-pip install -r /home/storm/Energy-aware-computing-continuum/python_algo/requirements.txt || echo "⚠ Warning: Failed to install Python dependencies, please check the requirements.txt file and your network connection."
+pip install -r /home/storm/Energy-aware-computing-continuum/services/python-placement/placement/requirements.txt || echo "⚠ Warning: Failed to install Python dependencies, please check the requirements.txt file and your network connection."
 
 # Create placement CSV directory
 mkdir -p /etc/storm

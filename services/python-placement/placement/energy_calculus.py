@@ -37,10 +37,10 @@ CARBON_INTENSITY_G_CO2_KWH = {
 
 EXPERIMENT_REGION = "europe-west9"
 
-PROJECT_ROOT          = Path(__file__).resolve().parents[1]
-INFRA_PROPERTIES_PATH = Path(__file__).resolve().parent / "properties" / "Infra_5nodes_GCP.properties"
-INFRA_MAPPING_PATH    = Path(__file__).resolve().parent / "properties" / "Infra_5nodes_GCP_mapping.csv"
-METRICS_RESULTS_DIR   = PROJECT_ROOT / "results_infra10"
+PROJECT_ROOT          = Path(__file__).resolve().parents[3]
+INFRA_PROPERTIES_PATH = PROJECT_ROOT / "configs" / "infra" / "Infra_5nodes_GCP.properties"
+INFRA_MAPPING_PATH    = PROJECT_ROOT / "configs" / "infra" / "Infra_5nodes_GCP_mapping.csv"
+METRICS_RESULTS_DIR   = PROJECT_ROOT / "experiments" / "results_infra10"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ def _normalize_strategy_name(name):
 @lru_cache(maxsize=1)
 def _load_algorithm_energy_index():
     """
-    Load solver/algorithm energy metrics from results/metrics_*.csv.
+    Load solver/algorithm energy metrics from experiments/results/metrics_*.csv.
 
     Returns
     -------
@@ -311,7 +311,7 @@ def _compute_path_latency_from_path_taken(path_taken_raw, infra_filename):
     if not isinstance(infra_filename, str) or not infra_filename.strip():
         return {}
 
-    infra_path = Path(__file__).resolve().parent / "properties" / infra_filename
+    infra_path = PROJECT_ROOT / "configs" / "infra" / infra_filename
     if not infra_path.exists():
         return {}
 

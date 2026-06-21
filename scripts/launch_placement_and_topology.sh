@@ -13,7 +13,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Variables
-RESULTS_DIR="$PROJECT_ROOT/results"
+RESULTS_DIR="$PROJECT_ROOT/experiments/results"
 PLACEMENT_FILE="$RESULTS_DIR/placement.csv"
 
 resolve_path() {
@@ -32,8 +32,8 @@ if [ $# -lt 3 ]; then
     echo "Available strategies: CSP, LLM, GreedyFirstFit, GreedyFirstIterate"
     echo ""
     echo "Examples:"
-    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_5comps_GCP.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv"
-    echo "  $0 python_algo/properties/Infra_5nodes_GCP.properties python_algo/properties/Appli_5comps_GCP.properties python_algo/properties/Infra_5nodes_GCP_mapping.csv GreedyFirstFit"
+    echo "  $0 configs/infra/Infra_5nodes_GCP.properties configs/app/Appli_5comps_GCP.properties configs/infra/Infra_5nodes_GCP_mapping.csv"
+    echo "  $0 configs/infra/Infra_5nodes_GCP.properties configs/app/Appli_5comps_GCP.properties configs/infra/Infra_5nodes_GCP_mapping.csv GreedyFirstFit"
     exit 1
 fi
 
@@ -80,7 +80,7 @@ else
     echo "⚠️  Warning : Python virtual environment not found at $HOME/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
 # run the placement algorithm
-python "$PROJECT_ROOT/python_algo/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PLACEMENT_FILE" --metrics-csv "$METRICS_FILE"
+python "$PROJECT_ROOT/services/python-placement/placement/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PLACEMENT_FILE" --metrics-csv "$METRICS_FILE"
 echo "✅ Python placement algorithm completed successfully!"
 echo "===================== Copying placement results to /etc/storm/placement.csv ... ===================="
 sudo cp "$PLACEMENT_FILE" /etc/storm/placement.csv

@@ -2,6 +2,7 @@ import javaproperties
 
 import re
 import json
+from pathlib import Path
 
 # helper to parse a list of braced tuples like: {16,32000}, {8,16000}
 def parse_braced_tuples(s):
@@ -18,7 +19,7 @@ class InfraProperties:
     """Parser for the infra .properties content.
 
     Usage:
-      infra = InfraProperties.from_file('properties/Infra_8nodes.properties')
+            infra = InfraProperties.from_file('configs/infra/Infra_8nodes.properties')
       print(infra.to_json())
     """
 
@@ -32,7 +33,7 @@ class InfraProperties:
         self._parse_all()
 
     @classmethod
-    def from_file(cls, file_path: str = 'properties/Infra_8nodes.properties'):
+    def from_file(cls, file_path: str = str(Path(__file__).resolve().parents[4] / 'configs' / 'infra' / 'Infra_8nodes.properties')):
         with open(file_path, 'rb') as f:
             props = javaproperties.load(f)
         return cls(props)

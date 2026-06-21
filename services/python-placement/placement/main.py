@@ -3,6 +3,7 @@ import argparse
 import os
 import logging
 import time
+from pathlib import Path
 
 from src.infraProperties import InfraProperties
 from src.networkGraph import NetworkGraph
@@ -27,6 +28,19 @@ LLM_TOKEN_ENERGY_WH_PER_1K = {
     'openai': (0.0015, 0.0025),
     'gemini': (0.0010, 0.0020),
 }
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_INFRA_PATH = REPO_ROOT / 'configs' / 'infra' / 'Infra_16nodes_fog3tier.properties'
+DEFAULT_APP_PATH = REPO_ROOT / 'configs' / 'app' / 'Appli_8comps_smartbuilding.properties'
+DEFAULT_PLACEMENT_CSV = REPO_ROOT / 'experiments' / 'results' / 'placement.csv'
+DEFAULT_METRICS_CSV = REPO_ROOT / 'experiments' / 'results' / 'metrics.csv'
+
+
+def _resolve_path(path_value: str) -> str:
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+    return str((REPO_ROOT / path).resolve())
 
 
 def _compute_solver_energy_meta(strategy_name: str, result_meta: dict, resolution_time_s: float) -> dict:
@@ -96,24 +110,29 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
     logger = logging.getLogger(__name__)
 
-    infra_properties_path = r'properties/Infra_16nodes_fog3tier.properties'
-    app_properties_path = r'properties/Appli_8comps_smartbuilding.properties'
+    infra_properties_path = str(DEFAULT_INFRA_PATH)
+    app_properties_path = str(DEFAULT_APP_PATH)
 
     parser = argparse.ArgumentParser(description='Demo placement runner')
     parser.add_argument('--plot', action='store_true', help='Whether to plot the graphs')
     parser.add_argument('--verbose', action='store_true', help='Whether to print detailed graph info and results')
     parser.add_argument('--infra', type=str, default=infra_properties_path, help='Path to infrastructure properties file' \
-    ' (default: properties/Infra_16nodes_fog3tier.properties)')
+    ' (default: configs/infra/Infra_16nodes_fog3tier.properties)')
     parser.add_argument('--app', type=str, default=app_properties_path, help='Path to application properties file' \
-    ' (default: properties/Appli_8comps_smartbuilding.properties)')
+    ' (default: configs/app/Appli_8comps_smartbuilding.properties)')
     parser.add_argument('--strategy', type=str, default='CSP', choices=['CSP', 'LLM', 'GreedyFirstFit', 'GreedyFirstIterate'], help='Placement strategy to use')
-    parser.add_argument('--placement-csv', type=str, default='results/placement.csv', help='Optional path to export placement results as CSV')
-    parser.add_argument('--metrics-csv', type=str, default='results/metrics.csv', help='Optional path to export evaluation metrics as CSV (rows are appended, useful for benchmarks)')
+    parser.add_argument('--placement-csv', type=str, default=str(DEFAULT_PLACEMENT_CSV), help='Optional path to export placement results as CSV')
+    parser.add_argument('--metrics-csv', type=str, default=str(DEFAULT_METRICS_CSV), help='Optional path to export evaluation metrics as CSV (rows are appended, useful for benchmarks)')
     args = parser.parse_args()
+
+    infra_input = _resolve_path(args.infra)
+    app_input = _resolve_path(args.app)
+    placement_csv = _resolve_path(args.placement_csv)
+    metrics_csv = _resolve_path(args.metrics_csv)
 
 
     # Load infrastructure and create network graph
-    infra = InfraProperties.from_file(args.infra)
+    infra = InfraProperties.from_file(infra_input)
 
     G = NetworkGraph.from_infra_dict(infra.to_dict())
     logger.info("Nodes: %s", G.G.number_of_nodes())
@@ -136,7 +155,7 @@ if __name__ == '__main__':
         G.draw(block=False)
 
     # Load application and create service graph
-    app = AppProperties.from_file(args.app)
+    app = AppProperties.from_file(app_input)
 
     service_G = ServiceGraph.from_app_dict(app.to_dict())
     logger.info("Service Nodes: %s", service_G.G.number_of_nodes())
@@ -238,16 +257,16 @@ if __name__ == '__main__':
     # Export results to CSV if requested
     if args.placement_csv:
         logger.info("Exporting placement results to CSV...")
-        filename = args.placement_csv
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        filename = placement_csv
+        Path(filename).parent.mkdir(parents=True, exist_ok=True)
         ResultExporter.export_placement_to_csv(result, filename=filename)
         logger.info(f"Placement exported to {filename}")
 
     # Export evaluation metrics to CSV if requested
     if args.metrics_csv:
         logger.info("Exporting evaluation metrics to CSV...")
-        metrics_filename = args.metrics_csv
-        os.makedirs(os.path.dirname(metrics_filename), exist_ok=True)
+        metrics_filename = metrics_csv
+        Path(metrics_filename).parent.mkdir(parents=True, exist_ok=True)
         path_taken = json.dumps(
             {
                 f"{u}->{v}": path

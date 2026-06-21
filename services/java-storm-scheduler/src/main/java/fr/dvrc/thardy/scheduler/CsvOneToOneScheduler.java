@@ -24,12 +24,7 @@ public class CsvOneToOneScheduler implements IScheduler {
         if (configuredFile != null) {
             this.csvFile = String.valueOf(configuredFile);
         } else {
-            String stormHome = System.getenv("STORM_HOME");
-            if (stormHome != null && !stormHome.isBlank()) {
-                this.csvFile = stormHome + "/conf/component-placement.csv";
-            } else {
-                this.csvFile = "component-placement.csv";
-            }
+            this.csvFile = "/etc/storm/placement.csv";
         }
         this.hasHeader = Boolean.parseBoolean(String.valueOf(conf.getOrDefault(
                 "csv.scheduler.hasHeader",

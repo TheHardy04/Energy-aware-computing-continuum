@@ -2,6 +2,7 @@ import javaproperties
 
 import re
 import json
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 
@@ -17,7 +18,7 @@ def parse_braced_tuples(s: str) -> List[List[str]]:
 class AppProperties:
 	"""Parser for the application .properties content.
 
-	Expects keys similar to `properties/Appli_4comps.properties`:
+	Expects keys similar to `configs/app/Appli_4comps.properties`:
 	  - application.nb
 	  - application.components
 	  - components.requirements: list of {CPU,RAM,lambda,mu}
@@ -46,7 +47,7 @@ class AppProperties:
 		self._parse_all()
 
 	@classmethod
-	def from_file(cls, file_path: str = 'properties/Appli_4comps.properties'):
+	def from_file(cls, file_path: str = str(Path(__file__).resolve().parents[4] / 'configs' / 'app' / 'Appli_4comps.properties')):
 		with open(file_path, 'rb') as f:
 			props = javaproperties.load(f)
 		return cls(props)
