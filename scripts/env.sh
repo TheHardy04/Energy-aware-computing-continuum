@@ -19,13 +19,13 @@ else
 fi
 
 # Check if STORM_HOME is set in .env or as an environment variable
-if [ -z "$STORM_HOME" ]; then
+if [ -z "${STORM_HOME:-}" ]; then
     echo "❌ Error: STORM_HOME is not set as an environment variable."
     exit 1
 fi
 
 # Check if ZK_HOME is set (optional, only needed if zookeeper is not already running on the system)
-if [ -z "$ZK_HOME" ]; then
+if [ -z "${ZK_HOME:-}" ]; then
     echo "⚠️  Warning: ZK_HOME is not set in .env."
     echo "   If you plan to start ZooKeeper from this project, please set ZK_HOME='/path/to/zookeeper' in your .env file."
 fi
@@ -36,8 +36,13 @@ export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
 export PROJECT_ROOT
 
+# Shared experiment output locations
+export RAW_RESULTS_DIR="$PROJECT_ROOT/experiments/raw"
+export TELEMETRY_LOG_FILE="${TELEMETRY_LOG_FILE:-$RAW_RESULTS_DIR/telemetry.log}"
+export TELEMETRY_PID_FILE="${TELEMETRY_PID_FILE:-/tmp/telemetry.pid}"
+
 # Allow LOG_DIR to be set in .env, otherwise default to project/logs
-if [ -z "$LOG_DIR" ]; then
+if [ -z "${LOG_DIR:-}" ]; then
     export LOG_DIR="$PROJECT_ROOT/logs"
 else
     export LOG_DIR

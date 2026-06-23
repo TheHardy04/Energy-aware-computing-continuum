@@ -40,6 +40,38 @@ python gcp_automations/deploy_gcp_from_properties.py configs/infra/Infra_5nodes_
 ./scripts/launch_placement_and_topology.sh configs/infra/Infra_5nodes_GCP.properties configs/app/Appli_5comps_GCP.properties configs/infra/Infra_5nodes_GCP_mapping.csv CSP
 ```
 
+## Full Experiment Automation
+
+Run the full experiment with a single command:
+
+```bash
+./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
+```
+
+This workflow does the following in order:
+
+1. Sources `scripts/env.sh` so Storm paths and logging variables are available.
+2. Deploys or reuses the GCP infrastructure with `python gcp_automations/deploy_gcp_from_properties.py <properties_file>`.
+3. Runs the Python placement engine and copies the generated CSVs into `/etc/storm/`.
+4. Starts `services/python-placement/placement/src/realtime_telemetry.py` in the background and writes its logs to `experiments/raw/telemetry.log`.
+5. Submits the Storm topology to Nimbus through `scripts/launch_topology_from_properties.sh`.
+
+### Outputs
+
+- Real-time metrics are appended to `experiments/raw/realtime_metrics.csv`.
+- Telemetry logs are written to `experiments/raw/telemetry.log`.
+- The telemetry PID is stored in `/tmp/telemetry.pid` so it can be stopped by `scripts/kill_storm.sh`.
+
+### Energy Mapping
+
+The real-time daemon mirrors the theoretical placement model used by the algorithms:
+
+- Compute power is derived from the same GCP vCPU-slot energy model used by placement evaluation.
+- Network power uses the measured GCP `sent_bytes_count` metric over a 30-second window and the constant `E_BIT = 1e-7` J/bit.
+- Total power is reported as `Compute_Power_W + Network_Power_W`, which makes the live telemetry directly comparable with the theoretical placement objective.
+
+In practice, this means your offline placement energy and the live experiment telemetry are expressed with the same compute and network terms, so you can compare algorithmic predictions against measured runtime behavior without changing the downstream analysis pipeline.
+
 ## Documentation
 
 - [services/python-placement/README.md](services/python-placement/README.md)

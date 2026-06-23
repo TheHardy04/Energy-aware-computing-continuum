@@ -192,8 +192,10 @@ def build_netem_command(latency_ms, bandwidth_mbit):
         'set -e; '
         'interface_name=$(ip route show default 2>/dev/null | head -n 1 | cut -d" " -f5); '
         'if [ -z "$interface_name" ]; then interface_name=ens4; fi; '
+        # Attempt to delete, but ignore errors if it doesn't exist
         'sudo tc qdisc del dev "$interface_name" root 2>/dev/null || true; '
-        f'sudo tc qdisc add dev "$interface_name" root netem {tc_arguments}; '
+        # Use 'replace' instead of 'add' to bypass the Exclusivity flag 
+        f'sudo tc qdisc replace dev "$interface_name" root netem {tc_arguments}; '
         'sudo tc qdisc show dev "$interface_name"'
     )
 

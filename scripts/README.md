@@ -49,11 +49,13 @@ Starts ZooKeeper if needed, then Nimbus and the Storm UI.
 
 ### Run placement and submit the topology in one step
 
-This wrapper runs the Python placement, writes outputs to `experiments/results/`, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology.
+This wrapper deploys the GCP infrastructure, runs the Python placement, writes outputs to `experiments/results/`, starts the real-time telemetry daemon, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology.
 
 ```bash
 ./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
 ```
+
+During the run, `experiments/raw/realtime_metrics.csv` accumulates the live telemetry rows, `experiments/raw/telemetry.log` records the daemon output, and `/tmp/telemetry.pid` stores the PID used by `scripts/kill_storm.sh`.
 
 ### Submit the Java test topology
 
@@ -66,6 +68,8 @@ This wrapper runs the Python placement, writes outputs to `experiments/results/`
 ```bash
 ./scripts/kill_storm.sh
 ```
+
+This also stops the background telemetry daemon when `/tmp/telemetry.pid` exists.
 
 ## Debug and Local Helpers
 
