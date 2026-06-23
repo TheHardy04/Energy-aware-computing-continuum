@@ -94,7 +94,7 @@ start_telemetry_daemon() {
     stop_telemetry_if_running
 
     echo "===================== Starting real-time telemetry daemon ... ===================="
-    nohup python "$TELEMETRY_SCRIPT" \
+    nohup "$PYTHON_CMD" "$TELEMETRY_SCRIPT" \
         --project-id "$gcp_project_id" \
         --output-csv "$RAW_RESULTS_DIR/realtime_metrics.csv" \
         > "$TELEMETRY_LOG_FILE" 2>&1 &
@@ -150,7 +150,7 @@ mkdir -p "$RAW_RESULTS_DIR"
 METRICS_FILE="$RESULTS_DIR/metrics_${STRATEGY}.csv"
 
 echo "===================== Deploying GCP infrastructure from properties ... ===================="
-python "$PROJECT_ROOT/gcp_automations/deploy_gcp_from_properties.py" "$INFRA_FILE"
+"$PYTHON_CMD" "$PROJECT_ROOT/gcp_automations/deploy_gcp_from_properties.py" "$INFRA_FILE"
 echo "✅ GCP infrastructure deployment completed successfully!"
 
 echo "===================== Running python placement algorithm (strategy: $STRATEGY) ... ===================="
@@ -160,7 +160,7 @@ else
     echo "⚠️  Warning: Python virtual environment not found at $HOME/venv. Please ensure you have set up the virtual environment and update the path in this script if necessary."
 fi
 
-python "$PROJECT_ROOT/services/python-placement/placement/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PLACEMENT_FILE" --metrics-csv "$METRICS_FILE"
+"$PYTHON_CMD" "$PROJECT_ROOT/services/python-placement/placement/main.py" --infra "$INFRA_FILE" --app "$APP_FILE" --strategy "$STRATEGY" --placement-csv "$PLACEMENT_FILE" --metrics-csv "$METRICS_FILE"
 echo "✅ Python placement algorithm completed successfully!"
 
 echo "===================== Copying placement results to /etc/storm/placement.csv ... ===================="

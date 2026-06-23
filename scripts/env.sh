@@ -36,6 +36,16 @@ export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
 export PROJECT_ROOT
 
+# Detect available Python command dynamically (cross-platform fallback)
+if command -v python3 >/dev/null 2>&1; then
+    export PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    export PYTHON_CMD="python"
+else
+    echo "❌ Error: Python is not installed on this system." >&2
+    exit 1
+fi
+
 # Shared experiment output locations
 export RAW_RESULTS_DIR="$PROJECT_ROOT/experiments/raw"
 export TELEMETRY_LOG_FILE="${TELEMETRY_LOG_FILE:-$RAW_RESULTS_DIR/telemetry.log}"

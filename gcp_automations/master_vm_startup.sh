@@ -261,6 +261,16 @@ export STORM_HOME=/usr/local/storm
 echo 'export STORM_HOME=/usr/local/storm' > /etc/profile.d/storm.sh
 chmod 644 /etc/profile.d/storm.sh
 
+# Detect available Python command dynamically (cross-platform fallback)
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+else
+    echo "❌ Error: Python is not installed on this system." >&2
+    exit 1
+fi
+
 # Setup .env file for storm user with STORM_HOME
 echo "STORM_HOME=/usr/local/storm" > /home/storm/.env
 if ! grep -q '^export STORM_HOME=/usr/local/storm$' /home/storm/.bashrc 2>/dev/null; then
@@ -269,7 +279,7 @@ fi
 chown storm:storm /home/storm/.env /home/storm/.bashrc
 
 # Setup python virtual environment for storm user
-sudo -u storm python3 -m venv /home/storm/venv
+sudo -u storm "$PYTHON_CMD" -m venv /home/storm/venv
 chown -R storm:storm /home/storm/venv
 source /home/storm/venv/bin/activate
 pip install --upgrade pip || echo "⚠ Warning: pip upgrade failed, continuing with existing pip version"
