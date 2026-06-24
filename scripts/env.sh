@@ -39,10 +39,13 @@ export PROJECT_ROOT
 # Detect available Python command dynamically, preferring the VM virtual environment when present
 if [ -x "/home/storm/venv/bin/python" ]; then
     export PYTHON_CMD="/home/storm/venv/bin/python"
+    echo "✅ Using Python from virtual environment: $PYTHON_CMD"
 elif command -v python3 >/dev/null 2>&1; then
     export PYTHON_CMD="python3"
+    echo "✅ Using Python 3 from system path: $PYTHON_CMD"
 elif command -v python >/dev/null 2>&1; then
     export PYTHON_CMD="python"
+    echo "✅ Using Python from system path: $PYTHON_CMD"
 else
     echo "❌ Error: Python is not installed on this system." >&2
     exit 1
