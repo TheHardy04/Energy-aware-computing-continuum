@@ -250,17 +250,18 @@ def _latest_point_value(series: Any) -> Tuple[float, str]:
         return 0.0, datetime.fromtimestamp(0, tz=timezone.utc).isoformat(timespec="seconds")
 
     def sort_key(point: Any) -> Tuple[int, int]:
-        interval = getattr(point, "interval", None)
-        end_time = getattr(interval, "end_time", None)
-        seconds = int(getattr(end_time, "seconds", 0) or 0)
-        nanos = int(getattr(end_time, "nanos", 0) or 0)
+        end_time = _point_end_time(point)
+        seconds = int(end_time.timestamp()) if end_time is not None else 0
+        nanos = int(getattr(getattr(getattr(point, "interval", None), "end_time", None), "nanos", 0) or 0)
         return seconds, nanos
 
     point = max(points, key=sort_key)
-    interval = getattr(point, "interval", None)
-    end_time = getattr(interval, "end_time", None)
-    end_seconds = int(getattr(end_time, "seconds", 0) or 0)
-    exact_timestamp = datetime.fromtimestamp(end_seconds, tz=timezone.utc).isoformat(timespec="seconds")
+    point_end_time = _point_end_time(point)
+    exact_timestamp = (
+        point_end_time.isoformat(timespec="seconds")
+        if point_end_time is not None
+        else datetime.fromtimestamp(0, tz=timezone.utc).isoformat(timespec="seconds")
+    )
     value = getattr(point, "value", None)
     if value is None:
         return 0.0, exact_timestamp
@@ -278,6 +279,44 @@ def _latest_point_value(series: Any) -> Tuple[float, str]:
     if getattr(value, "int64_value", None) is not None:
         return float(value.int64_value), exact_timestamp
     return 0.0, exact_timestamp
+
+
+def _point_end_time(point: Any) -> Optional[datetime]:
+    interval = getattr(point, "interval", None)
+    end_time = getattr(interval, "end_time", None)
+    if end_time is None:
+        return None
+
+    if isinstance(end_time, datetime):
+        return end_time.astimezone(timezone.utc) if end_time.tzinfo else end_time.replace(tzinfo=timezone.utc)
+
+    to_datetime = getattr(end_time, "ToDatetime", None)
+    if callable(to_datetime):
+        try:
+            value = to_datetime()
+        except Exception:  # pylint: disable=broad-except
+            value = None
+        if isinstance(value, datetime):
+            return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    seconds = getattr(end_time, "seconds", None)
+    nanos = getattr(end_time, "nanos", None)
+    if seconds is not None or nanos is not None:
+        return datetime.fromtimestamp(float(seconds or 0) + float(nanos or 0) / 1_000_000_000, tz=timezone.utc)
+
+    timestamp = getattr(end_time, "timestamp", None)
+    if callable(timestamp):
+        try:
+            value = timestamp()
+        except Exception:  # pylint: disable=broad-except
+            value = None
+        if value is not None:
+            try:
+                return datetime.fromtimestamp(float(value), tz=timezone.utc)
+            except (TypeError, ValueError, OSError):
+                return None
+
+    return None
 
 
 def _extract_instance_id(series: Any) -> str:
