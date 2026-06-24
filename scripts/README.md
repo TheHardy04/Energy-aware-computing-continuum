@@ -49,7 +49,7 @@ Starts ZooKeeper if needed, then Nimbus and the Storm UI.
 
 ### Run placement and submit the topology in one step
 
-This wrapper deploys the GCP infrastructure, runs the Python placement, writes outputs to `experiments/results/`, starts the real-time telemetry daemon, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology.
+This wrapper is intended to run on the already deployed `storm-nimbus` master VM. It sources `scripts/env.sh`, runs the Python placement, writes outputs to `experiments/results/`, starts the real-time telemetry daemon, copies the scheduler CSV files into `/etc/storm/`, and then submits the topology locally.
 
 ```bash
 ./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
@@ -101,4 +101,4 @@ python ./services/python-placement/placement/main.py --strategy CSP --infra ./co
 
 - `env.sh` is sourced by the other scripts and validates `STORM_HOME`.
 - `launch_placement_and_topology.sh` writes placement and metrics outputs to [../experiments/results](../experiments/results).
-- The combined wrapper expects the Storm config created by the GCP startup scripts, where `csv.scheduler.file` points to `/etc/storm/placement.csv`.
+- The combined wrapper expects the Storm config already present on the master VM, where `csv.scheduler.file` points to `/etc/storm/placement.csv`.

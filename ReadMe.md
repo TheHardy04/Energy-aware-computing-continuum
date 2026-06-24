@@ -48,13 +48,13 @@ Run the full experiment with a single command:
 ./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
 ```
 
-This workflow does the following in order:
+This workflow is meant to run directly on the already deployed `storm-nimbus` master VM and does the following in order:
 
 1. Sources `scripts/env.sh` so Storm paths and logging variables are available.
-2. Deploys or reuses the GCP infrastructure with `python gcp_automations/deploy_gcp_from_properties.py <properties_file>`.
-3. Runs the Python placement engine and copies the generated CSVs into `/etc/storm/`.
-4. Starts `services/python-placement/placement/src/realtime_telemetry.py` in the background and writes its logs to `experiments/raw/telemetry.log`.
-5. Submits the Storm topology to Nimbus through `scripts/launch_topology_from_properties.sh`.
+2. Runs the Python placement engine and copies the generated CSVs into `/etc/storm/`.
+3. Starts `services/python-placement/placement/src/realtime_telemetry.py` in the background and writes its logs to `experiments/raw/telemetry.log`.
+4. Builds the Storm scheduler module with Maven if the JAR is missing or stale.
+5. Submits the Storm topology to local Nimbus with the generated placement inputs.
 
 ### Outputs
 
