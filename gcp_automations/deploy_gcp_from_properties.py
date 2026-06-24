@@ -226,7 +226,7 @@ def apply_netem_over_ssh(vm_name, zone, latency_ms, bandwidth_mbit):
         last_error = precheck_stderr
         if attempt < 6:
             print(f"Attempt {attempt}/6: Host up but keys missing. Retrying...")
-            time.sleep(10)
+            time.sleep(3)
             continue
 
         print(f"SSH verification failed for {vm_name} after 6 attempts. Skipping NetEm shaping.")
