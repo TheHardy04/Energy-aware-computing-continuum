@@ -36,8 +36,10 @@ export STORM_BIN_DIR="$STORM_HOME/bin"
 export STORM_LIB_DIR="$STORM_HOME/lib"
 export PROJECT_ROOT
 
-# Detect available Python command dynamically (cross-platform fallback)
-if command -v python3 >/dev/null 2>&1; then
+# Detect available Python command dynamically, preferring the VM virtual environment when present
+if [ -x "/home/storm/venv/bin/python" ]; then
+    export PYTHON_CMD="/home/storm/venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
     export PYTHON_CMD="python3"
 elif command -v python >/dev/null 2>&1; then
     export PYTHON_CMD="python"
