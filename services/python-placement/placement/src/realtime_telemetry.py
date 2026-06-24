@@ -128,7 +128,7 @@ class RealtimeGcpTelemetryProvider(GcpTelemetryProvider):
         project_name = f"projects/{self.project_id}"
         interval = monitoring_v3.TimeInterval(
             {
-                "start_time": {"seconds": int(now - self.window_seconds)},
+                "start_time": {"seconds": int(now - 240)}, 
                 "end_time": {"seconds": int(now)},
             }
         )

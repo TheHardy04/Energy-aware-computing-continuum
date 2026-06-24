@@ -464,7 +464,8 @@ def deploy_master(master_name, master_type, zone, startup_script):
         '--image-project=ubuntu-os-cloud',
         '--provisioning-model=SPOT',
         f'--metadata-from-file=startup-script={startup_script}',
-        '--tags=storm-node'
+        '--tags=storm-node',
+        '--scopes=cloud-platform'
     ]
     run_gcloud(cmd_master)
     print("⏳ Waiting 5 seconds for network allocation...")
