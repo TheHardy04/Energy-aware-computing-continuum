@@ -116,6 +116,14 @@ build_scheduler_if_needed() {
     fi
 }
 
+stop_existing_topology_if_running() {
+    if storm list 2>/dev/null | awk 'NR > 2 { print $1 }' | grep -Fxq "$TOPOLOGY_NAME"; then
+        echo "An existing topology named '$TOPOLOGY_NAME' is running; stopping it first..."
+        storm kill "$TOPOLOGY_NAME" -w 0
+        echo "Existing topology '$TOPOLOGY_NAME' stopped."
+    fi
+}
+
 start_telemetry_daemon() {
     local gcp_project_id
     if ! gcp_project_id="$(resolve_gcp_project_id)"; then
@@ -144,6 +152,7 @@ submit_topology() {
     fi
 
     echo "Submitting the topology to local Nimbus..."
+    stop_existing_topology_if_running
     storm jar "$SCHEDULER_JAR" "$TOPOLOGY_CLASS" "$APP_FILE" "$TOPOLOGY_NAME"
     echo "Topology '$TOPOLOGY_NAME' submitted successfully."
 }
