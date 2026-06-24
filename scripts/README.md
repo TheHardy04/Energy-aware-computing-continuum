@@ -55,7 +55,7 @@ This wrapper is intended to run on the already deployed `storm-nimbus` master VM
 ./scripts/launch_placement_and_topology.sh ./configs/infra/Infra_5nodes_GCP.properties ./configs/app/Appli_5comps_GCP.properties ./configs/infra/Infra_5nodes_GCP_mapping.csv CSP
 ```
 
-During the run, `experiments/raw/realtime_metrics.csv` accumulates the live telemetry rows, `experiments/raw/telemetry.log` records the daemon output, and `/tmp/telemetry.pid` stores the PID used by `scripts/kill_storm.sh`.
+During the run, `experiments/raw/storm_metrics.csv` and `experiments/raw/gcp_metrics.csv` accumulate the live telemetry rows, `experiments/raw/telemetry.log` records the daemon output, and `/tmp/telemetry.pid` stores the PID used by `scripts/kill_storm.sh`.
 
 ### Submit the Java test topology
 

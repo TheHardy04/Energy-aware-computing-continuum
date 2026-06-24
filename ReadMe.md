@@ -58,7 +58,8 @@ This workflow is meant to run directly on the already deployed `storm-nimbus` ma
 
 ### Outputs
 
-- Real-time metrics are appended to `experiments/raw/realtime_metrics.csv`.
+- Storm metrics are appended to `experiments/raw/storm_metrics.csv`.
+- GCP metrics are appended to `experiments/raw/gcp_metrics.csv`.
 - Telemetry logs are written to `experiments/raw/telemetry.log`.
 - The telemetry PID is stored in `/tmp/telemetry.pid` so it can be stopped by `scripts/kill_storm.sh`.
 

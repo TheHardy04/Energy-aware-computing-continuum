@@ -1,7 +1,7 @@
-"""Real-time telemetry daemon for synchronized GCP and Storm metrics.
+"""Real-time telemetry daemon for GCP and Storm metrics.
 
 The daemon polls Google Cloud Monitoring and the local Apache Storm REST API
-every 30 seconds, then appends merged CSV rows to the experiment output.
+every 30 seconds, then appends telemetry rows to separate CSV outputs.
 """
 
 from __future__ import annotations
@@ -39,23 +39,28 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_INTERVAL_SECONDS = 30
 DEFAULT_WINDOW_SECONDS = 30
 DEFAULT_STORM_BASE_URL = "http://localhost:8080"
-DEFAULT_OUTPUT_CSV = REPO_ROOT / "experiments" / "raw" / "realtime_metrics.csv"
+DEFAULT_STORM_CSV = REPO_ROOT / "experiments" / "raw" / "storm_metrics.csv"
+DEFAULT_GCP_CSV = REPO_ROOT / "experiments" / "raw" / "gcp_metrics.csv"
 DEFAULT_VCPU_CAPACITY = 1
 DEFAULT_HTTP_TIMEOUT_SECONDS = 8.0
 POWER_SCALE = 1000
 E_BIT = float(os.environ.get("REALTIME_TELEMETRY_E_BIT", "1e-7"))
 
-CSV_COLUMNS = [
+STORM_CSV_COLUMNS = [
     "Timestamp",
     "Topology_ID",
+    "Tuples_Emitted",
+    "Average_Latency_ms",
+]
+
+GCP_CSV_COLUMNS = [
+    "Exact_GCP_Timestamp",
     "Node_Name",
     "CPU_Utilization",
     "Bytes_Sent",
     "Compute_Power_W",
     "Network_Power_W",
     "Total_Power_W",
-    "Tuples_Emitted",
-    "Average_Latency_ms",
 ]
 
 
@@ -73,6 +78,7 @@ class GcpSample:
     """Merged GCP metrics for one monitored instance."""
 
     instance_id: str
+    exact_gcp_timestamp: str
     node_name: str
     cpu_utilization: float
     bytes_sent: float
@@ -122,13 +128,14 @@ class RealtimeGcpTelemetryProvider(GcpTelemetryProvider):
         self.default_vcpu_capacity = max(1, int(default_vcpu_capacity))
         self.network_cache: Dict[str, float] = {}
         self.node_name_cache: Dict[str, str] = {}
+        self.point_timestamp_cache: Dict[str, str] = {}
 
     def _fetch_metric_map(self, metric_type: str, aligner: monitoring_v3.Aggregation.Aligner) -> Dict[str, float]:
         now = time.time()
         project_name = f"projects/{self.project_id}"
         interval = monitoring_v3.TimeInterval(
             {
-                "start_time": {"seconds": int(now - 240)}, 
+                "start_time": {"seconds": int(now - 240)},
                 "end_time": {"seconds": int(now)},
             }
         )
@@ -152,7 +159,9 @@ class RealtimeGcpTelemetryProvider(GcpTelemetryProvider):
         metric_map: Dict[str, float] = {}
         for result in results:
             instance_id = _extract_instance_id(result)
-            metric_map[instance_id] = _latest_point_value(result)
+            metric_value, exact_timestamp = _latest_point_value(result)
+            metric_map[instance_id] = metric_value
+            self.point_timestamp_cache[instance_id] = exact_timestamp
             self.node_name_cache[instance_id] = _extract_node_name(result)
         return metric_map
 
@@ -181,6 +190,10 @@ class RealtimeGcpTelemetryProvider(GcpTelemetryProvider):
             cpu_utilization = max(0.0, _to_float(self.cpu_cache.get(instance_id, 0.0), 0.0))
             bytes_sent = max(0.0, _to_float(self.network_cache.get(instance_id, 0.0), 0.0))
             cpu_used = int(round(cpu_utilization * cpu_capacity))
+            exact_timestamp = self.point_timestamp_cache.get(
+                instance_id,
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            )
 
             compute_power_w = node_power_w(cpu_used, cpu_capacity, cfg) / POWER_SCALE
             network_power_w = (bytes_sent * 8.0 * E_BIT) / float(self.window_seconds)
@@ -188,6 +201,7 @@ class RealtimeGcpTelemetryProvider(GcpTelemetryProvider):
             samples.append(
                 GcpSample(
                     instance_id=instance_id,
+                    exact_gcp_timestamp=exact_timestamp,
                     node_name=self.node_name_cache.get(instance_id, instance_id),
                     cpu_utilization=cpu_utilization,
                     bytes_sent=bytes_sent,
@@ -229,11 +243,11 @@ def _to_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _latest_point_value(series: Any) -> float:
-    """Return the latest numeric value from a Monitoring time series."""
+def _latest_point_value(series: Any) -> Tuple[float, str]:
+    """Return the latest numeric value and end timestamp from a Monitoring time series."""
     points = getattr(series, "points", None) or []
     if not points:
-        return 0.0
+        return 0.0, datetime.fromtimestamp(0, tz=timezone.utc).isoformat(timespec="seconds")
 
     def sort_key(point: Any) -> Tuple[int, int]:
         interval = getattr(point, "interval", None)
@@ -243,23 +257,27 @@ def _latest_point_value(series: Any) -> float:
         return seconds, nanos
 
     point = max(points, key=sort_key)
+    interval = getattr(point, "interval", None)
+    end_time = getattr(interval, "end_time", None)
+    end_seconds = int(getattr(end_time, "seconds", 0) or 0)
+    exact_timestamp = datetime.fromtimestamp(end_seconds, tz=timezone.utc).isoformat(timespec="seconds")
     value = getattr(point, "value", None)
     if value is None:
-        return 0.0
+        return 0.0, exact_timestamp
 
     value_pb = getattr(value, "_pb", None)
     oneof = value_pb.WhichOneof("value") if value_pb is not None else None
     if oneof == "double_value":
-        return float(value.double_value)
+        return float(value.double_value), exact_timestamp
     if oneof == "int64_value":
-        return float(value.int64_value)
+        return float(value.int64_value), exact_timestamp
     if oneof == "bool_value":
-        return 1.0 if value.bool_value else 0.0
+        return (1.0 if value.bool_value else 0.0), exact_timestamp
     if getattr(value, "double_value", None) is not None:
-        return float(value.double_value)
+        return float(value.double_value), exact_timestamp
     if getattr(value, "int64_value", None) is not None:
-        return float(value.int64_value)
-    return 0.0
+        return float(value.int64_value), exact_timestamp
+    return 0.0, exact_timestamp
 
 
 def _extract_instance_id(series: Any) -> str:
@@ -317,21 +335,26 @@ def _search_nested_value(payload: Any, keys: Iterable[str]) -> Optional[Any]:
     return None
 
 
-def write_rows(output_csv: Path, rows: List[Dict[str, Any]]) -> None:
+def write_rows(output_csv: Path, rows: List[Dict[str, Any]], fieldnames: List[str]) -> None:
     """Append telemetry rows to the output CSV and create the header when needed."""
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     needs_header = not output_csv.exists() or output_csv.stat().st_size == 0
 
     with output_csv.open("a", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         if needs_header:
             writer.writeheader()
         for row in rows:
             writer.writerow(row)
 
 
-def run_cycle(gcp_provider: RealtimeGcpTelemetryProvider, storm_client: StormApiClient, output_csv: Path) -> None:
-    """Fetch both telemetry sources in parallel, merge them, and persist one cycle."""
+def run_cycle(
+    gcp_provider: RealtimeGcpTelemetryProvider,
+    storm_client: StormApiClient,
+    storm_csv: Path,
+    gcp_csv: Path,
+) -> None:
+    """Fetch both telemetry sources in parallel and persist each stream independently."""
     with ThreadPoolExecutor(max_workers=2) as executor:
         gcp_future = executor.submit(gcp_provider.collect_snapshot)
         storm_future = executor.submit(storm_client.fetch_snapshot)
@@ -353,30 +376,40 @@ def run_cycle(gcp_provider: RealtimeGcpTelemetryProvider, storm_client: StormApi
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning("Unexpected GCP telemetry error: %s", exc)
 
+    if storm_snapshot.topology_id:
+        storm_rows = [
+            {
+                "Timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "Topology_ID": storm_snapshot.topology_id,
+                "Tuples_Emitted": storm_snapshot.tuples_emitted,
+                "Average_Latency_ms": storm_snapshot.average_latency_ms,
+            }
+        ]
+        write_rows(storm_csv, storm_rows, STORM_CSV_COLUMNS)
+        LOGGER.info("Wrote %d Storm telemetry rows to %s", len(storm_rows), storm_csv)
+    else:
+        LOGGER.warning("No Storm telemetry row was collected during this cycle.")
+
     if not gcp_samples:
         LOGGER.warning("No GCP telemetry rows were collected during this cycle.")
         return
 
-    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    rows: List[Dict[str, Any]] = []
+    gcp_rows: List[Dict[str, Any]] = []
     for sample in gcp_samples:
-        rows.append(
+        gcp_rows.append(
             {
-                "Timestamp": timestamp,
-                "Topology_ID": storm_snapshot.topology_id,
+                "Exact_GCP_Timestamp": sample.exact_gcp_timestamp,
                 "Node_Name": sample.node_name,
                 "CPU_Utilization": sample.cpu_utilization,
                 "Bytes_Sent": sample.bytes_sent,
                 "Compute_Power_W": sample.compute_power_w,
                 "Network_Power_W": sample.network_power_w,
                 "Total_Power_W": sample.total_power_w,
-                "Tuples_Emitted": storm_snapshot.tuples_emitted,
-                "Average_Latency_ms": storm_snapshot.average_latency_ms,
             }
         )
 
-    write_rows(output_csv, rows)
-    LOGGER.info("Wrote %d telemetry rows to %s", len(rows), output_csv)
+    write_rows(gcp_csv, gcp_rows, GCP_CSV_COLUMNS)
+    LOGGER.info("Wrote %d GCP telemetry rows to %s", len(gcp_rows), gcp_csv)
 
 
 def parse_args() -> argparse.Namespace:
@@ -384,7 +417,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Real-time GCP and Storm telemetry daemon")
     parser.add_argument("--project-id", default=os.environ.get("GCP_PROJECT_ID", ""), help="GCP project ID. Defaults to GCP_PROJECT_ID.")
     parser.add_argument("--storm-url", default=DEFAULT_STORM_BASE_URL, help="Base URL for the Storm REST API.")
-    parser.add_argument("--output-csv", default=str(DEFAULT_OUTPUT_CSV), help="Output CSV path.")
+    parser.add_argument("--storm-csv", default=str(DEFAULT_STORM_CSV), help="Output CSV path for Storm metrics.")
+    parser.add_argument("--gcp-csv", default=str(DEFAULT_GCP_CSV), help="Output CSV path for GCP metrics.")
     parser.add_argument("--interval-seconds", type=int, default=DEFAULT_INTERVAL_SECONDS, help="Loop interval in seconds.")
     parser.add_argument("--window-seconds", type=int, default=DEFAULT_WINDOW_SECONDS, help="Monitoring window in seconds.")
     parser.add_argument("--default-vcpu-capacity", type=int, default=DEFAULT_VCPU_CAPACITY, help="Fallback vCPU capacity per monitored VM.")
@@ -403,7 +437,8 @@ def main() -> int:
 
     args = parse_args()
     project_id = args.project_id.strip() or resolve_project_id()
-    output_csv = Path(args.output_csv).expanduser().resolve()
+    storm_csv = Path(args.storm_csv).expanduser().resolve()
+    gcp_csv = Path(args.gcp_csv).expanduser().resolve()
 
     gcp_provider = RealtimeGcpTelemetryProvider(
         project_id=project_id,
@@ -415,12 +450,13 @@ def main() -> int:
         timeout_seconds=args.http_timeout_seconds,
     )
 
-    LOGGER.info("Starting telemetry daemon. Output: %s", output_csv)
+    LOGGER.info("Starting telemetry daemon. Storm output: %s", storm_csv)
+    LOGGER.info("Starting telemetry daemon. GCP output: %s", gcp_csv)
 
     while True:
         cycle_start = time.time()
         try:
-            run_cycle(gcp_provider, storm_client, output_csv)
+            run_cycle(gcp_provider, storm_client, storm_csv, gcp_csv)
         except KeyboardInterrupt:
             raise
         except Exception as exc:  # pylint: disable=broad-except

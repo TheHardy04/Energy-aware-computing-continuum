@@ -138,7 +138,8 @@ start_telemetry_daemon() {
     echo "Starting real-time telemetry daemon..."
     nohup "$PYTHON_CMD" "$TELEMETRY_SCRIPT" \
         --project-id "$gcp_project_id" \
-        --output-csv "$RAW_RESULTS_DIR/realtime_metrics.csv" \
+        --storm-csv "$RAW_RESULTS_DIR/storm_metrics.csv" \
+        --gcp-csv "$RAW_RESULTS_DIR/gcp_metrics.csv" \
         > "$TELEMETRY_LOG_FILE" 2>&1 &
     echo $! > "$TELEMETRY_PID_FILE"
     echo "Telemetry daemon started with PID $(cat "$TELEMETRY_PID_FILE")."
