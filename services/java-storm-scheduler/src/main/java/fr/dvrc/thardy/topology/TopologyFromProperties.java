@@ -122,7 +122,8 @@ public class TopologyFromProperties {
 
             // Emit data
             long data = rnd.nextInt(1_000_000);
-            collector.emit(new Values(data));
+            String msgId = UUID.randomUUID().toString();
+            collector.emit(new Values(data), msgId);
 
             // Schedule next emission
             nextEmitNanos += nanosPerEmit;
@@ -166,7 +167,10 @@ public class TopologyFromProperties {
             burnCpuMillis(cpuMillis);
 
             // Re-emit data (pass through the pipeline)
-            collector.emit(new Values(data));
+            collector.emit(input, new Values(data));
+
+            // ACK the tuple to tell storm that it has been processed
+            collector.ack(input);
         }
 
         private void burnCpuMillis(int millis) {
@@ -379,7 +383,7 @@ public class TopologyFromProperties {
         List<Link> links = parseLinks(props);
 
         int workers = getPositiveIntProperty(props, "topology.workers", 3);
-        int ackers = getNonNegativeIntProperty(props, "topology.ackers", 0);
+        int ackers = getNonNegativeIntProperty(props, "topology.ackers", 1);
         int defaultParallelism = getPositiveIntProperty(props, "component.parallelism.default", 1);
         int spoutParallelism = getPositiveIntProperty(props, "spout.parallelism", defaultParallelism);
         int burnMsPerCpuUnit = getPositiveIntProperty(props, "cpu.burn.ms.per.cpu", 20);

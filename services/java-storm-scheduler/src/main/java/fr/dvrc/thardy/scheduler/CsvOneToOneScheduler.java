@@ -271,25 +271,32 @@ public class CsvOneToOneScheduler implements IScheduler {
             LOG.warn("No more free slots available. {} components may remain unscheduled.", needs.size());
         }
 
-        int slotIdx = 0;
         for (Map.Entry<String, List<ExecutorDetails>> rem : needs.entrySet()) {
+            String componentId = rem.getKey();
+            List<ExecutorDetails> execs = rem.getValue();
+
+            if (componentId.startsWith("__")) {
+                if (!usedSlots.isEmpty()) {
+                    WorkerSlot target = usedSlots.iterator().next();
+                    cluster.assign(target, topology.getId(), execs);
+                    LOG.info("System component '{}' safely packed into existing slot nodeId={}",
+                            componentId, target.getNodeId());
+                    continue;
+                }
+            }
+
             if (availableSlots.isEmpty()) {
                 LOG.warn("No slots available for component '{}'. Remaining: {}",
-                        rem.getKey(), needs.keySet());
+                        componentId, needs.keySet());
                 break;
             }
 
-            // Simple distribution: pick a slot and use it.
-            // Using modulo logic as original code did, but safer logic could be just remove(0)
-            WorkerSlot target = availableSlots.get(slotIdx % availableSlots.size());
-            cluster.assign(target, topology.getId(), rem.getValue());
+            WorkerSlot target = availableSlots.remove(0);
+            cluster.assign(target, topology.getId(), execs);
             usedSlots.add(target);
-            availableSlots.remove(slotIdx % availableSlots.size());
 
             LOG.info("Fallback packed component '{}' into available worker nodeId={} port={}",
-                    rem.getKey(), target.getNodeId(), target.getPort());
-
-            slotIdx++;
+                    componentId, target.getNodeId(), target.getPort());
         }
     }
 
