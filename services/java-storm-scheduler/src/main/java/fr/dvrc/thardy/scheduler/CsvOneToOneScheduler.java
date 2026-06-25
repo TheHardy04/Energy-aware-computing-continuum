@@ -59,35 +59,43 @@ public class CsvOneToOneScheduler implements IScheduler {
                                   Map<String, String> hostIdToVmName) {
         LOG.info("Scheduling topology: {} ({})", topology.getName(), topology.getId());
 
-        // 0) Pre-processing: Unassign executors that are currently placed on the WRONG host.
-        // This ensures that "Available Slots" are actually freed up for the correct placement.
+        // 0) Pre-processing
         unassignImproperlyPlacedExecutors(cluster, topology, placement, hostIdToVmName);
 
-        // component -> executors that still need scheduling
-        // (This will now include the ones we just unassigned)
         Map<String, List<ExecutorDetails>> needs =
                 new HashMap<>(cluster.getNeedsSchedulingComponentToExecutors(topology));
 
         LOG.debug("Needs-scheduling components for topology {}: {}", topology.getName(), needs.keySet());
-        LOG.debug("Placement keys loaded from CSV: {}", placement.keySet());
 
         if (needs.isEmpty()) {
             LOG.info("Nothing to schedule for topology {}", topology.getName());
             return;
         }
 
-        // 1) Group executors by target host according to CSV
-        // host -> list of executors that should run there
+        // Group executors by target host according to CSV
         Map<String, List<ExecutorDetails>> hostToExecs = new LinkedHashMap<>();
-        // host -> list of component names grouped for that host
         Map<String, List<String>> hostToComponents = new LinkedHashMap<>();
 
         groupExecutorsByHost(needs, placement, hostToExecs, hostToComponents);
 
-        // 2) Assign ONE worker slot per host, packing all its executors into that slot
+        // Storm forbids calling assign() twice on the same slot.
+        // We must group the system components (__acker) with the first host BEFORE assignment.
+        String firstHost = hostToExecs.isEmpty() ? null : hostToExecs.keySet().iterator().next();
+        if (firstHost != null) {
+            for (String comp : new ArrayList<>(needs.keySet())) {
+                if (comp.startsWith("__")) {
+                    List<ExecutorDetails> sysExecs = needs.get(comp);
+                    hostToExecs.get(firstHost).addAll(sysExecs);
+                    hostToComponents.get(firstHost).add(comp);
+                    LOG.info("Bundled system component '{}' with host '{}' to avoid slot collision.", comp, firstHost);
+                }
+            }
+        }
+
+        // Assign ONE worker slot per host, packing all its executors into that slot
         Set<WorkerSlot> usedSlots = assignExecutorsFromCsv(cluster, topology, hostToExecs, hostToComponents, needs, hostIdToVmName);
 
-        // 3) Fallback: pack remaining components into available slots
+        // Fallback: pack remaining components into available slots
         if (!needs.isEmpty()) {
             assignRemainingExecutors(cluster, topology, needs, usedSlots);
         }
@@ -258,7 +266,6 @@ public class CsvOneToOneScheduler implements IScheduler {
     private void assignRemainingExecutors(Cluster cluster, TopologyDetails topology,
                                           Map<String, List<ExecutorDetails>> needs,
                                           Set<WorkerSlot> usedSlots) {
-        // Get all available slots from cluster, excluding those already assigned in step 2
         List<WorkerSlot> availableSlots = new ArrayList<>();
         for (WorkerSlot slot : cluster.getAvailableSlots()) {
             if (!usedSlots.contains(slot)) {
@@ -266,7 +273,6 @@ public class CsvOneToOneScheduler implements IScheduler {
             }
         }
 
-        // If nothing was assigned yet, also consider existing assignment slots
         if (availableSlots.isEmpty() && !usedSlots.isEmpty()) {
             LOG.warn("No more free slots available. {} components may remain unscheduled.", needs.size());
         }
@@ -275,22 +281,13 @@ public class CsvOneToOneScheduler implements IScheduler {
             String componentId = rem.getKey();
             List<ExecutorDetails> execs = rem.getValue();
 
-            if (componentId.startsWith("__")) {
-                if (!usedSlots.isEmpty()) {
-                    WorkerSlot target = usedSlots.iterator().next();
-                    cluster.assign(target, topology.getId(), execs);
-                    LOG.info("System component '{}' safely packed into existing slot nodeId={}",
-                            componentId, target.getNodeId());
-                    continue;
-                }
-            }
-
             if (availableSlots.isEmpty()) {
                 LOG.warn("No slots available for component '{}'. Remaining: {}",
                         componentId, needs.keySet());
                 break;
             }
 
+            // Always pick the first available slot and properly remove it from the list
             WorkerSlot target = availableSlots.remove(0);
             cluster.assign(target, topology.getId(), execs);
             usedSlots.add(target);
