@@ -386,7 +386,7 @@ public class TopologyFromProperties {
         int ackers = getNonNegativeIntProperty(props, "topology.ackers", 1);
         int defaultParallelism = getPositiveIntProperty(props, "component.parallelism.default", 1);
         int spoutParallelism = getPositiveIntProperty(props, "spout.parallelism", defaultParallelism);
-        int burnMsPerCpuUnit = getPositiveIntProperty(props, "cpu.burn.ms.per.cpu", 20);
+        int burnMsPerCpuUnit = getPositiveIntProperty(props, "cpu.burn.ms.per.cpu", 1);
         int muReference = getPositiveIntProperty(props, "mu.reference", 400);
 
         System.out.println("Building topology with " + components.size() + " components and " + links.size() + " links");
@@ -468,6 +468,12 @@ public class TopologyFromProperties {
         conf.setDebug(false);
         conf.setNumWorkers(workers);
         conf.setNumAckers(ackers);
+
+        // --- RAM Configuration  ---
+        int workerMemoryMb = getPositiveIntProperty(props, "topology.worker.memory.mb", 1024);
+        conf.put(Config.TOPOLOGY_WORKER_MAX_HEAP_SIZE_MB, workerMemoryMb);
+        conf.put(Config.TOPOLOGY_WORKER_CHILDOPTS, "-Xmx" + workerMemoryMb + "m");
+        System.out.println("Configured Worker Memory: " + workerMemoryMb + " MB");
 
         // Submit topology
         System.out.println("\nSubmitting topology: " + topologyName);
