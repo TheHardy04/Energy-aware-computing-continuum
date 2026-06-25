@@ -484,6 +484,29 @@ def get_and_validate_master_ip(master_name, zone):
     print(f"✅ Master Internal IP is: {nimbus_ip}")
     return nimbus_ip
 
+def restart_worker_storm_service(vm_name, zone):
+    """Restarts the Storm supervisor service on the worker to force reconnection."""
+    print(f"🔄 Restarting Storm Supervisor on {vm_name} to force reconnection to Nimbus...")
+    restart_cmd = [
+        'gcloud', 'compute', 'ssh', vm_name,
+        f'--zone={zone}',
+        '--quiet',
+        '--command', 'sudo systemctl restart storm-supervisor.service || true'
+    ]
+    run_gcloud(restart_cmd, ignore_errors=True)
+
+def get_vm_external_ip(vm_name, zone):
+    """Fetches the external/public IP of a given GCP VM."""
+    cmd = [
+        'gcloud', 'compute', 'instances', 'describe', vm_name,
+        f'--zone={zone}',
+        '--format=get(networkInterfaces[0].accessConfigs[0].natIP)',
+    ]
+    stdout, returncode = run_gcloud(cmd, ignore_errors=True)
+    if returncode == 0 and stdout.strip():
+        return stdout.strip()
+    return None
+
 def deploy_workers(hosts, zones, network_profiles, machine_map, nimbus_ip, worker_startup_script):
     """Deploys worker VMs based on the hosts configuration."""
     name_counters = {v["prefix"]: 1 for v in machine_map.values()}
@@ -505,6 +528,7 @@ def deploy_workers(hosts, zones, network_profiles, machine_map, nimbus_ip, worke
             print(f"🟢 Worker {index}: {vm_name} already exists in {zone}. Skipping creation.")
             ensure_vm_running(vm_name, zone)
             apply_netem_over_ssh(vm_name, zone, network_profile['latency_ms'], network_profile['bandwidth_mbit'])
+            restart_worker_storm_service(vm_name, zone)
         else:
             print(f"⚙️ Deploying Worker {index}: {vm_name} ({vm_spec['type']}) in {zone}")
 
@@ -553,6 +577,20 @@ def main():
     deploy_workers(hosts, zones, network_profiles, MACHINE_MAP, nimbus_ip, WORKER_STARTUP_SCRIPT)
 
     print("\n🎉 Infrastructure sync complete!")
+
+    print("\n" + "="*60)
+    print("✅ GCP INFRASTRUCTURE DEPLOYMENT COMPLETED SUCCESSFULLY!")
+    
+    # Fetch public IP for the UI
+    print("🔍 Fetching Storm UI public address...")
+    master_public_ip = get_vm_external_ip(MASTER_NAME, MASTER_ZONE)
+    
+    if master_public_ip:
+        print(f"🌟 Storm UI is accessible at: http://{master_public_ip}:8080")
+        print("   (Ctrl+Click or Cmd+Click on the link to open it in your browser)")
+    else:
+        print("⚠️ Could not retrieve the Master VM public IP.")
+    print("="*60 + "\n")
     
     print(f"\n🔌 Connecting to Master: {MASTER_NAME}...")
     # On Windows, shell=True is needed to find the 'gcloud' executable (which is often a cmd/bat file)
