@@ -35,8 +35,9 @@ GCP_PUE = 1.09
 
 def get_power_profile(vm_name):
     """Matches a VM name to its power profile based on its prefix."""
+    vm_name_str = str(vm_name)  
     for prefix, profile in POWER_PROFILES.items():
-        if prefix in vm_name:
+        if prefix in vm_name_str:
             return profile
     return {"p_idle": 5.0, "p_max": 15.0}
 
@@ -96,7 +97,7 @@ def analyze_performance(df_gcp, df_storm, duration_seconds):
 
     for idx, row in df_gcp.iterrows():
         # 1. Fetch the correct column names from realtime_telemetry.py
-        vm_name = row["Node_Name"]
+        vm_name = str(row["Node_Name"])  
         cpu_usage_fraction = row["CPU_Utilization"] # GCP outputs 0.0 to 1.0
         bytes_sent = row["Bytes_Sent"]
         
