@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 # --- Configuration ---
-RAW_DIR = "raw"
-RESULTS_DIR = "results"
+RAW_DIR = "experiments/raw"
+RESULTS_DIR = "experiments/results"
 GCP_CSV = os.path.join(RAW_DIR, "gcp_metrics.csv")
 STORM_CSV = os.path.join(RAW_DIR, "storm_metrics.csv")
 WINDOW_MINUTES = 15
