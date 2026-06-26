@@ -2,6 +2,9 @@
 analyze_results.py
 Analyzes raw GCP and Storm telemetry to compute energy efficiency and latency metrics
 over the last 15 minutes of the experiment, generating academic-style plots.
+
+Incorporates an analytical network energy model to account for physical WAN/LAN 
+routing overhead that is not captured by GCP's virtual NIC metrics.
 """
 
 import os
@@ -10,8 +13,8 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 # --- Configuration ---
-RAW_DIR = "experiments/raw"
-RESULTS_DIR = "experiments/results"
+RAW_DIR = "raw"
+RESULTS_DIR = "results"
 GCP_CSV = os.path.join(RAW_DIR, "gcp_metrics.csv")
 STORM_CSV = os.path.join(RAW_DIR, "storm_metrics.csv")
 WINDOW_MINUTES = 15
@@ -45,39 +48,69 @@ def load_and_filter_data():
 def analyze_performance(df_gcp, df_storm, duration_seconds):
     """Computes KPIs: Average Latency, Throughput, and Total Energy."""
     
+    # ---------------------------------------------------------
     # 1. Applicative Metrics (Storm)
-    # Assuming 'Tuples_Emitted' is cumulative. Delta = Max - Min.
-    total_tuples = df_storm["Tuples_Emitted"].max() - df_storm["Tuples_Emitted"].min()
-    throughput_tps = total_tuples / duration_seconds if duration_seconds > 0 else 0
+    # ---------------------------------------------------------
+    # The 'Emitted' metric in Storm UI counts both the actual data tuple 
+    # AND the '__ack_init' tracking message. We divide by 2 to get the real payload throughput.
+    raw_emitted_diff = df_storm["Tuples_Emitted"].max() - df_storm["Tuples_Emitted"].min()
+    total_real_tuples = raw_emitted_diff / 2  
+    
+    throughput_tps = total_real_tuples / duration_seconds if duration_seconds > 0 else 0
     avg_latency_ms = df_storm["Average_Latency_ms"].mean()
 
-    # 2. Infrastructure Metrics (GCP)
-    # Group by timestamp to get cluster-wide power at each recorded moment
+    # ---------------------------------------------------------
+    # 2. Infrastructure Metrics (GCP Compute)
+    # ---------------------------------------------------------
+    # Group by timestamp to get cluster-wide compute power at each recorded moment
     cluster_power_over_time = df_gcp.groupby("Exact_GCP_Timestamp").agg({
         "Compute_Power_W": "sum",
-        "Network_Power_W": "sum",
-        "Total_Power_W": "sum"
+        "Network_Power_W": "sum" # Keeping this for logging, but we will override it for analysis
     }).reset_index()
 
-    # Average power over the 15-minute window
-    avg_total_power_w = cluster_power_over_time["Total_Power_W"].mean()
     avg_compute_power_w = cluster_power_over_time["Compute_Power_W"].mean()
-    avg_network_power_w = cluster_power_over_time["Network_Power_W"].mean()
 
-    # Total Energy (Joules) = Average Power (Watts) * Time (seconds)
+    # ---------------------------------------------------------
+    # 3. Analytical Network Energy Model (Literature Based)
+    # ---------------------------------------------------------
+    # GCP virtual NICs report near-zero power (e.g., 0.28 W) because they do not account 
+    # for physical routers, switches, and optical links across the WAN/LAN. 
+    # We apply an analytical model based on the throughput.
+    
+    SIMULATED_TUPLE_SIZE_BYTES = 50 * 1024  # Assuming a 50 KB payload per tuple (e.g., IoT Image)
+    BITS_PER_BYTE = 8
+    
+    # Energy per bit (Joules/bit) based on Mebrek et al. and core networking literature
+    # A generic blended average (50 nJ/bit) is used here. 
+    # For a deeper comparison, you could weight this based on how many edges vs cloud links the placement uses.
+    AVG_ROUTING_ENERGY_PER_BIT = 50 * (10**-9) 
+    
+    throughput_bps = throughput_tps * SIMULATED_TUPLE_SIZE_BYTES * BITS_PER_BYTE
+    
+    # Calculated analytical network power
+    avg_network_power_w = throughput_bps * AVG_ROUTING_ENERGY_PER_BIT
+
+    # ---------------------------------------------------------
+    # 4. Final Energy Calculations
+    # ---------------------------------------------------------
+    avg_total_power_w = avg_compute_power_w + avg_network_power_w
     total_energy_joules = avg_total_power_w * duration_seconds
 
-    # Energy Efficiency
-    joules_per_tuple = total_energy_joules / total_tuples if total_tuples > 0 else 0
+    # Energy Efficiency: How many Joules does it cost to process ONE real tuple?
+    joules_per_tuple = total_energy_joules / total_real_tuples if total_real_tuples > 0 else 0
+
+    # Overwrite the DataFrame network values with our analytical model for the plot
+    cluster_power_over_time["Network_Power_W"] = avg_network_power_w
+    cluster_power_over_time["Total_Power_W"] = cluster_power_over_time["Compute_Power_W"] + avg_network_power_w
 
     metrics = {
         "Duration_Seconds": duration_seconds,
-        "Total_Tuples_Processed": total_tuples,
+        "Total_Tuples_Processed": total_real_tuples,
         "Throughput_TPS": throughput_tps,
         "Average_Latency_ms": avg_latency_ms,
         "Avg_Cluster_Power_W": avg_total_power_w,
         "Compute_Power_W": avg_compute_power_w,
-        "Network_Power_W": avg_network_power_w,
+        "Analytical_Network_Power_W": avg_network_power_w,
         "Total_Energy_Joules": total_energy_joules,
         "Energy_Joules_Per_Tuple": joules_per_tuple
     }
@@ -85,7 +118,7 @@ def analyze_performance(df_gcp, df_storm, duration_seconds):
     return metrics, cluster_power_over_time
 
 def plot_academic_graphs(df_storm, cluster_power_over_time):
-    """Generates a side-by-side plot matching academic paper styles (like AlgoTel)."""
+    """Generates a side-by-side plot matching academic paper styles."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
     # Plot 1: Response Time (Latency) over time
@@ -98,9 +131,9 @@ def plot_academic_graphs(df_storm, cluster_power_over_time):
     ax1.tick_params(axis='x', rotation=45)
 
     # Plot 2: Cluster Power over time (Compute vs Network)
-    ax2.plot(cluster_power_over_time["Exact_GCP_Timestamp"], cluster_power_over_time["Total_Power_W"], color="tab:red", linewidth=2, label="Total Power")
-    ax2.fill_between(cluster_power_over_time["Exact_GCP_Timestamp"], cluster_power_over_time["Compute_Power_W"], color="tab:orange", alpha=0.3, label="Compute Power")
-    ax2.set_title("Cluster Power Consumption")
+    ax2.plot(cluster_power_over_time["Exact_GCP_Timestamp"], cluster_power_over_time["Total_Power_W"], color="tab:red", linewidth=2, label="Total Power (Model)")
+    ax2.fill_between(cluster_power_over_time["Exact_GCP_Timestamp"], cluster_power_over_time["Compute_Power_W"], color="tab:orange", alpha=0.3, label="Compute Power (Measured)")
+    ax2.set_title("Cluster Power Consumption (Compute + Analytical Net)")
     ax2.set_xlabel("Time")
     ax2.set_ylabel("Power (Watts)")
     ax2.grid(True, linestyle="--", alpha=0.7)
@@ -128,11 +161,11 @@ def main():
         print("🔬 ALGOTEL COMPARATIVE ANALYSIS (LAST 15 MINS)")
         print("=====================================================")
         print(f"Time Window       : {start_time.strftime('%H:%M:%S')} to {max_time.strftime('%H:%M:%S')}")
-        print(f"Throughput        : {metrics['Throughput_TPS']:.2f} tuples/sec")
+        print(f"Throughput        : {metrics['Throughput_TPS']:.2f} real tuples/sec")
         print(f"Average Latency   : {metrics['Average_Latency_ms']:.2f} ms")
         print("-----------------------------------------------------")
-        print(f"Avg Compute Power : {metrics['Compute_Power_W']:.2f} W")
-        print(f"Avg Network Power : {metrics['Network_Power_W']:.2f} W")
+        print(f"Avg Compute Power : {metrics['Compute_Power_W']:.2f} W (Measured)")
+        print(f"Avg Network Power : {metrics['Analytical_Network_Power_W']:.2f} W (Modeled)")
         print(f"Total Cluster Pwr : {metrics['Avg_Cluster_Power_W']:.2f} W")
         print("-----------------------------------------------------")
         print(f"Total Energy Used : {metrics['Total_Energy_Joules']:.2f} Joules")
@@ -140,7 +173,6 @@ def main():
         print("=====================================================")
 
         # Save metrics to a CSV line for multi-algorithm comparison
-        # (Allows you to append Greedy, LLM, CSP runs into one file later)
         summary_file = os.path.join(RESULTS_DIR, "summary_kpi_comparison.csv")
         df_metrics = pd.DataFrame([metrics])
         header = not os.path.exists(summary_file)
