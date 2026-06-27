@@ -22,18 +22,18 @@ from functools import lru_cache
 
 # GCP energy model defaults (aligned with Google Environmental Report 2023)
 GCP_PUE = 1.10
-GCP_P_VCPU_IDLE_W = 1.0
-GCP_P_VCPU_ACTIVE_W = 8.0
+GCP_P_VCPU_IDLE_W = 0.71
+GCP_P_VCPU_ACTIVE_W = 4.26
 
 GCP_LAT_INTRAZONE_MS = 2.0
 GCP_LAT_INTERZONE_MS = 25.0
 
 GCP_FACTOR_INTRAZONE = 1.0
 GCP_FACTOR_INTERZONE = 1.5
-GCP_FACTOR_CROSSREGION = 2.0
+GCP_FACTOR_CROSSREGION = 2.5
 
 # CP-SAT works on integers; energies are tracked in deci-Watts and converted back to Watts in meta.
-ENERGY_SCALE = 10
+ENERGY_SCALE = 100
 
 
 def _parse_simple_properties(file_path: str) -> Dict[str, str]:
@@ -121,7 +121,7 @@ def link_factor(latency_ms: float, cfg: Dict[str, float]) -> float:
         cfg: Configuration dictionary from _load_energy_settings()
         
     Returns:
-        Energy factor (1.0 for intra-zone, 1.5 for inter-zone, 2.0 for cross-region)
+        Energy factor (1.0 for intra-zone, 1.5 for inter-zone, 2.5 for cross-region)
     """
     if latency_ms <= cfg["gcp.lat.intrazone_ms"]:
         return cfg["gcp.factor.intrazone"]
@@ -138,7 +138,7 @@ def link_factor_scaled(latency_ms: float, cfg: Dict[str, float]) -> int:
         cfg: Configuration dictionary from _load_energy_settings()
         
     Returns:
-        Scaled integer factor (10, 15, or 20 with default ENERGY_SCALE=10)
+        Scaled integer factor (100, 150, or 250 with default ENERGY_SCALE=100)
     """
     intrazone_ms = cfg["gcp.lat.intrazone_ms"]
     interzone_ms = cfg["gcp.lat.interzone_ms"]
